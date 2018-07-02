@@ -85,7 +85,7 @@ class FunctionSignature():
                 private = True
             elif isinstance(dec, ast.Name) and dec.id == "public":
                 public = True
-            else:
+            elif not (isinstance(dec, ast.Name) and dec.id[:4] == 'IFL_') : # ignore IFL
                 raise StructureException("Bad decorator", dec)
         if public and private:
             raise StructureException("Cannot use public and private decorators on the same function: {}".format(name))

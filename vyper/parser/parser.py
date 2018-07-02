@@ -16,7 +16,7 @@ from vyper.exceptions import (
     TypeMismatchException,
     VariableDeclarationException,
 )
-from vyper.function_signature import (
+from vyper.function_signature import (#source ~/vyper-venv/bin/activate
     FunctionSignature,
     VariableRecord,
     ContractRecord,
@@ -73,6 +73,13 @@ from vyper import __version__
 if not hasattr(ast, 'AnnAssign'):
     raise Exception("Requires python 3.6 or higher for annotation support")
 
+def if_parse(code) :
+    code = pre_parser(code)
+    o = ast.parse(code)
+    decorate_ast_with_source(o, code)
+    o = resolve_negative_literals(o)
+    #TODO: p = strip_off_ifl(o)
+    return o.body
 
 # Converts code to parse tree
 def parse(code):
@@ -82,7 +89,7 @@ def parse(code):
     o = resolve_negative_literals(o)
     return o.body
 
-
+# source ~/vyper-venv/bin/activate
 # Minor pre-parser checks.
 def pre_parser(code):
     result = []
@@ -242,6 +249,8 @@ def get_item_name_and_attributes(item, attributes):
         attributes[item.func.id] = True
         # Raise for multiple args
         if len(item.args) != 1:
+            if item.func.id == 'IFL' : #TODO: implement IFL func parse
+                return get_item_name_and_attributes(item.args[0], attributes)
             raise StructureException("%s expects one arg (the type)" % item.func.id)
         return get_item_name_and_attributes(item.args[0], attributes)
     return None, attributes
@@ -251,11 +260,23 @@ def add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, 
     item_attributes = {"public": False}
     if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
         item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
+        print('get item name and attr suc!') #IFL debug
         if not all([attr in valid_global_keywords for attr in item_attributes.keys()]):
             raise StructureException('Invalid global keyword used: %s' % item_attributes, item)
     if item.value is not None:
         raise StructureException('May not assign value whilst defining type', item)
-    elif isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event":
+    #IFL begin
+    if isinstance(item.annotation, ast.Call) and item.annotation.func.id == 'IFL' :
+        print(item)
+        node = ast.AnnAssign()
+        node.annotation = item.annotation.args[0]
+        node.target = item.target
+        node.value = item.value
+        node.simple = item.simple
+        item = node
+        print(item, item_name)
+    #IFL end
+    if isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event":
         if _globals or len(_defs):
             raise StructureException("Events must all come before global declarations and function definitions", item)
         _events.append(item)

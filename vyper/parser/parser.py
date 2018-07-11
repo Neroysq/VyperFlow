@@ -73,6 +73,8 @@ from vyper import __version__
 if not hasattr(ast, 'AnnAssign'):
     raise Exception("Requires python 3.6 or higher for annotation support")
 
+# Input: orginal code
+# Output: ifl, ast
 def if_parse(code) :
     code = pre_parser(code)
     o = ast.parse(code)
@@ -250,11 +252,103 @@ def get_item_name_and_attributes(item, attributes):
         # Raise for multiple args
         if len(item.args) != 1:
             if item.func.id == 'IFL' : #TODO: implement IFL func parse
+                if len(item.args) != 2 :
+                    raise StructureException("IFL expects two args instead of %s" % len(item.args))
+                attributes[item.func.id] = IF_utils.evaluate(item.args[1])
                 return get_item_name_and_attributes(item.args[0], attributes)
             raise StructureException("%s expects one arg (the type)" % item.func.id)
         return get_item_name_and_attributes(item.args[0], attributes)
     return None, attributes
 
+def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, item):
+    item_attributes = {"public": False}
+    if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
+        item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
+        print('get item name and attr suc!') #IFL debug
+        if not all([attr in valid_global_keywords for attr in item_attributes.keys()]):
+            raise StructureException('Invalid global keyword used: %s' % item_attributes, item)
+    if item.value is not None:
+        raise StructureException('May not assign value whilst defining type', item)
+    #IFL begin
+    if isinstance(item.annotation, ast.Call) and item.annotation.func.id == 'IFL' :
+        print(item)
+        node = ast.AnnAssign()
+        node.annotation = item.annotation.args[0]
+        node.target = item.target
+        node.value = item.value
+        node.simple = item.simple
+        item = node
+        print(item, item_name)
+    #IFL end
+    if isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event":
+        if _globals or len(_defs):
+            raise StructureException("Events must all come before global declarations and function definitions", item)
+        _events.append(item)
+    elif not isinstance(item.target, ast.Name):
+        raise StructureException("Can only assign type to variable in top-level statement", item)
+    # Is this a custom unit definition.
+    elif item.target.id == 'units':
+        if not _custom_units:
+            if not isinstance(item.annotation, ast.Dict):
+                raise VariableDeclarationException("Define custom units using units: { }.", item.target)
+            for key, value in zip(item.annotation.keys, item.annotation.values):
+                if not isinstance(value, ast.Str):
+                    raise VariableDeclarationException("Custom unit description must be a valid string.", value)
+                if not isinstance(key, ast.Name):
+                    raise VariableDeclarationException("Custom unit name must be a valid string unquoted string.", key)
+                if key.id in _custom_units:
+                    raise VariableDeclarationException("Custom unit may only be defined once", key)
+                if not is_varname_valid(key.id, custom_units=_custom_units):
+                    raise VariableDeclarationException("Custom unit may not be a reserved keyword", key)
+                _custom_units.append(key.id)
+        else:
+            raise VariableDeclarationException("Can units can only defined once.", item.target)
+    # Check if variable name is reserved or invalid
+    elif not is_varname_valid(item.target.id, custom_units=_custom_units):
+        raise VariableDeclarationException("Variable name invalid or reserved: ", item.target)
+    # Check if global already exists, if so error
+    elif item.target.id in _globals:
+        raise VariableDeclarationException("Cannot declare a persistent variable twice!", item.target)
+    elif len(_defs):
+        raise StructureException("Global variables must all come before function definitions", item)
+    # If the type declaration is of the form public(<type here>), then proceed with
+    # the underlying type but also add getters
+    elif isinstance(item.annotation, ast.Call) and item.annotation.func.id == "address":
+        if item.annotation.args[0].id not in premade_contracts:
+            raise VariableDeclarationException("Unsupported premade contract declaration", item.annotation.args[0])
+        premade_contract = premade_contracts[item.annotation.args[0].id]
+        _contracts[item.target.id] = add_contract(premade_contract.body)
+        if "IFL" not in item_attributes :
+            raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
+        _IFLs[item.target.id] = item_attributes["IFL"]
+        _globals[item.target.id] = VariableRecord(item.target.id, len(_globals), BaseType('address'), True)
+    elif item_name in _contracts:
+        _globals[item.target.id] = ContractRecord(item.target.id, len(_globals), ContractType(item_name), True)
+        if item_attributes["public"]:
+            typ = ContractType(item_name)
+            for getter in mk_getter(item.target.id, typ):
+                _getters.append(parse_line('\n' * (item.lineno - 1) + getter))
+                _getters[-1].pos = getpos(item)
+    elif isinstance(item.annotation, ast.Call) and item.annotation.func.id == "public":
+        if isinstance(item.annotation.args[0], ast.Name) and item_name in _contracts:
+            typ = ContractType(item_name)
+        else:
+            typ = parse_type(item.annotation.args[0], 'storage', custom_units=_custom_units)
+        if "IFL" not in item_attributes :
+            raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
+        _IFLs[item.target.id] = item_attributes["IFL"]
+        _globals[item.target.id] = VariableRecord(item.target.id, len(_globals), typ, True)
+        # Adding getters here
+        for getter in mk_getter(item.target.id, typ):
+            _getters.append(parse_line('\n' * (item.lineno - 1) + getter))
+            _getters[-1].pos = getpos(item)
+    else:
+        _globals[item.target.id] = VariableRecord(
+            item.target.id, len(_globals),
+            parse_type(item.annotation, 'storage', custom_units=_custom_units),
+            True
+        )
+    return _custom_units, _contracts, _events, _globals, _getters, _IFLs
 
 def add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, item):
     item_attributes = {"public": False}
@@ -369,6 +463,34 @@ def get_contracts_and_defs_and_globals(code):
             raise StructureException("Invalid top-level statement", item)
     return _contracts, _events, _defs + _getters, _globals, _custom_units
 
+# Parse top-level functions and variables
+def if_get_contracts_and_defs_and_globals(code):
+    _contracts = {}
+    _events = []
+    _globals = {}
+    _defs = []
+    _getters = []
+    _IFLs = {}
+    _custom_units = []
+
+    for item in code:
+        # Contract references
+        if isinstance(item, ast.ClassDef):
+            if _events or _globals or _defs:
+                raise StructureException("External contract declarations must come before event declarations, global declarations, and function definitions", item)
+            _contracts[item.name] = add_contract(item.body)
+        # Statements of the form:
+        # variable_name: type
+        elif isinstance(item, ast.AnnAssign):
+            _custom_units, _contracts, _events, _globals, _getters, _IFLs = if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, item)
+        # Function definitions
+        elif isinstance(item, ast.FunctionDef):
+            if item.name in _globals:
+                raise VariableDeclarationException("Function name shadowing a variable name: %s" % item.name)
+            _defs.append(item)
+        else:
+            raise StructureException("Invalid top-level statement", item)
+    return _contracts, _events, _defs + _getters, _globals, _custom_units, _IFLs
 
 # Header code
 initializer_list = ['seq', ['mstore', 28, ['calldataload', 0]]]
@@ -453,6 +575,198 @@ def parse_other_functions(o, otherfuncs, _globals, sigs, external_contracts, ori
         o.append(['return', 0, ['lll', sub, 0]])
         return o
 
+def if_get_func_caller_and_augs_labels(_def, _func_caller, _func_augs) :
+    WithIFL = False
+    for decorator in _def.decorator_list :
+        if len(decorator.id) > 4 and decorator.id[:4] == "IFL_" :
+            WithIFL = True
+            _func_caller[_def.name] = IF_utils.evaluate(decorator[5:])
+            break
+    if not WithIFL :
+        raise StructureException("function %s definition without information flow label" % _def.name)
+    augs = []
+    for aug in _def.args.args :
+        if not (isinstance(aug.annotation, ast.Call) and aug.annotation.func.id == "IFL") :
+            raise StructureException("aug declaration %s without information flow label in func %s" % (aug.arg, _def.name))
+        augs.append([aug.arg, IF_utils.evaluate(aug.annotation.func.args[1])])
+    _func_augs[_def.name] = augs
+
+    return _func_caller, _func_augs
+
+def if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs) :
+    if isinstance(node, ast.Expr) :
+        return if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+
+    if isinstance(node, ast.UnaryOp) :
+        return if_parse_expr(node.operand, _func_callers, _func_augs, _cons, IFLs)
+    elif isinstance(node, ast.BinOp) :
+        lpc, _cons = if_parse_expr(node.left, _func_callers, _func_augs, _cons, IFLs)
+        rpc, _cons = if_parse_expr(node.right, _func_callers, _func_augs, _cons, IFLs)
+        return IF_utils.conjuction(lpc, rpc), _cons
+    elif isinstance(node, ast.BoolOp) :
+        npc = IF_utils.bottom()
+        for value in node.values :
+            tpc, _cons = if_parse_expr(value, _func_callers, _func_augs, _cons, IFLs)
+            npc = IF_utils.conjuction(tpc, npc)
+        return npc, _cons
+    elif isinstance(node, ast.Compare) :
+        npc, _cons = if_parse_expr(node.left, _func_callers, _func_augs, _cons, IFLs)
+        for value in node.comparators :
+            tpc, _cons = if_parse_expr(value, _func_callers, _func_augs, _cons, IFLs)
+            npc = IF_utils.conjuction(tpc, npc)
+        return npc, _cons
+    elif isinstance(node, ast.Call) :
+        #TODO: generate constraints for caller
+    elif isinstance(node, ast.keyword) :
+        npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+        return npc, _cons
+    elif isinstance(node, ast.IfExp) :
+        #TODO
+        continue
+    elif isinstance(node, ast.Attribute) :
+        if node.value.id == 'self' :
+            npc = IFLs[node.attr]
+        else :
+            npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+
+        return npc, _cons
+    elif isinstance(node, ast.Subscript) :
+        if isinstance(node.slice, ast.Index) :
+            npc, _cons = if_parse_expr(node.slice.value, _func_callers, _func_augs, _cons, IFLs)
+        elif isinstance(node.slice, ast.Slice) :
+            lpc, _cons = if_parse_expr(node.slice.lower, _func_callers, _func_augs, _cons, IFLs)
+            upc, _cons = if_parse_expr(node.slice.upper, _func_callers, _func_augs, _cons, IFLs)
+            spc, _cons = if_parse_expr(node.slice.step, _func_callers, _func_augs, _cons, IFLs)
+            npc = IF_utils.conjuction(IF_utils.conjuction(lpc, upc), spc)
+
+        return npc, _cons
+
+    elif isinstance(node, ast.conprehension) :
+        # TODO:
+        continue
+
+
+def if_parse_sentence(node, _func_callers, _func_augs, _cons, IFLs, pc) :
+"""
+    ast.Expr: self.expr,
+    ast.Pass: self.parse_pass,
+    TODO: ast.AnnAssign: self.ann_assign,
+    ast.Assign: self.assign,
+    ast.If: self.parse_if,
+    ast.Call: self.call,
+    ast.Assert: self.parse_assert,
+    ast.For: self.parse_for,
+    ast.AugAssign: self.aug_assign,
+    ast.Break: self.parse_break,
+    ast.Continue: self.parse_continue,
+    ast.Return: self.parse_return,
+"""
+
+    if isinstance(node, ast.Expr) :
+        npc, _cons = if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs)
+        #pc = IF_utils.conjuction(pc, npc)
+    elif isinstance(node, ast.Assign) :
+        for target in node.targets :
+            if target.id in _func_augs :
+                llb = _func_augs[target.id]
+            else :
+                llb = IFLs[target.id]
+            npc, _cons = if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs)
+            _cons.append(IF_utils.setCons(llb, npc))
+
+    elif isinstance(node, ast.If) :
+        npc, _cons = if_parse_expr(node.test, _func_callers, _func_augs, _cons, IFLs)
+        npc = IF_utils.conjuction(pc, npc)
+        for nnode in node.body :
+            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+
+
+        npc, _cons = if_parse_expr(node.test, _func_callers, _func_augs, _cons, IFLs)
+        npc = IF_utils.conjuction(pc, npc)
+        for nnode in node.orelse :
+            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+
+    elif isinstance(node, ast.assert) :
+        npc, _cons = if_parse_expr(node.test, _func_callers, _func_augs, _cons, IFLs)
+    elif isinstance(node, ast.Call) :
+        npc, _cons = if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs)
+
+    elif isinstance(node, ast.For) :
+        #TODO: add local var
+        npc, _cons = if_parse_expr(node.iter, _func_callers, _func_augs, _cons, IFLs)
+        npc = IF_utils.conjuction(pc, npc)
+        for nnode in node.body :
+            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+
+
+        npc, _cons = if_parse_expr(node.iter, _func_callers, _func_augs, _cons, IFLs)
+        npc = IF_utils.conjuction(pc, npc)
+        for nnode in node.orelse :
+            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+
+    elif isinstance(node, ast.AugAssign) :
+        npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+
+    elif isinstance(node, ast.Break) :
+        continue
+    elif isinstance(node, ast.Continue) :
+        continue
+    elif isinstance(node, ast.Return) :
+        continue
+
+    return pc, _cons, IFLs
+
+def if_gen_cons_from_func(_def, _func_callers, _func_augs, _cons, IFLs) :
+    #TODO: deal with local var declaration
+    pc = _func_callers[_def.name]
+    for node in _def.body :
+        pc, _cons, IFLs = if_parse_sentence(node, _def, _func_callers, _func_augs, _cons, IFLs, pc)
+
+# Main python parse tree => LLL method
+def if_parse_tree_to_lll(code, origcode, runtime_only=False):
+    _contracts, _events, _defs, _globals, _custom_units, IFLs = if_get_contracts_and_defs_and_globals(code)
+
+    _func_callers = {}
+    _func_augs = {}
+    _cons = []
+    for _def in _defs :
+        _func_callers, _func_augs = if_get_func_caller_and_augs_labels(_def, _func_callers, _func_augs)
+
+    for _def in _defs :
+        _cons, IFLs = if_gen_cons_from_func(_def, _func_callers, _func_augs, _cons, IFLs)
+
+    return if_printer(IFLs, _func_callers, _func_augs, _cons)
+
+    _names = [_def.name for _def in _defs] + [_event.target.id for _event in _events]
+    # Checks for duplicate function / event names
+    if len(set(_names)) < len(_names):
+        raise VariableDeclarationException("Duplicate function or event name: %s" % [name for name in _names if _names.count(name) > 1][0])
+
+    # Initialization function
+    initfunc = [_def for _def in _defs if is_initializer(_def)]
+    # Default function
+    defaultfunc = [_def for _def in _defs if is_default_func(_def)]
+    # Regular functions
+    otherfuncs = [_def for _def in _defs if not is_initializer(_def) and not is_default_func(_def)]
+
+    sigs = {}
+    external_contracts = {}
+    # Create the main statement
+    o = ['seq']
+    if _events:
+        sigs = parse_events(sigs, _events, _custom_units)
+    if _contracts:
+        external_contracts = parse_external_contracts(external_contracts, _contracts)
+    # If there is an init func...
+    if initfunc:
+        o.append(['seq', initializer_lll])
+        o.append(parse_func(initfunc[0], _globals, {**{'self': sigs}, **external_contracts}, origcode, _custom_units))
+    # If there are regular functions...
+    if otherfuncs or defaultfunc:
+        o = parse_other_functions(
+            o, otherfuncs, _globals, sigs, external_contracts, origcode, _custom_units, defaultfunc, runtime_only
+        )
+    return LLLnode.from_list(o, typ=None)
 
 # Main python parse tree => LLL method
 def parse_tree_to_lll(code, origcode, runtime_only=False):

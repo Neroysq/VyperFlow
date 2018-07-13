@@ -730,9 +730,22 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
     _contracts, _events, _defs, _globals, _custom_units, IFLs, _cons = if_get_contracts_and_defs_and_globals(code)
 
     _func_callers = {}
+    """
+        "funcname" :
+            {
+                "begin-label-pc" : ,
+                "end-label-pc" :,
+            }
+    """
     _func_augs = {}
+    """
+        "funcname" :
+            {
+                "aug-name" : ,
+            }
+    """
     for _def in _defs :
-        _func_callers, _func_augs = if_get_func_caller_and_augs_labels(_def, _func_callers, _func_augs)
+        _func_callers, _func_augs, IFLs, _cons = if_get_func_caller_and_augs_labels(_def, _func_callers, _func_augs, IFLs, _cons)
 
     for _def in _defs :
         _cons, IFLs = if_gen_cons_from_func(_def, _func_callers, _func_augs, _cons, IFLs)

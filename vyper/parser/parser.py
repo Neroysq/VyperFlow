@@ -260,7 +260,7 @@ def get_item_name_and_attributes(item, attributes):
         return get_item_name_and_attributes(item.args[0], attributes)
     return None, attributes
 
-def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, item):
+def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, _cons, item):
     item_attributes = {"public": False}
     if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
         item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
@@ -277,6 +277,7 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
         node.target = item.target
         node.value = item.value
         node.simple = item.simple
+        ast.copy_location(node, item)
         item = node
         print(item, item_name)
     #IFL end
@@ -320,7 +321,8 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
         _contracts[item.target.id] = add_contract(premade_contract.body)
         if "IFL" not in item_attributes :
             raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
-        _IFLs[item.target.id] = item_attributes["IFL"]
+        _IFLs[item.target.id] = {"name": item_attributes["IFL"], "pos" : str(item.lineno) + ":" + str(item.col_offset)}
+        _cons.append(IF_utils.)
         _globals[item.target.id] = VariableRecord(item.target.id, len(_globals), BaseType('address'), True)
     elif item_name in _contracts:
         _globals[item.target.id] = ContractRecord(item.target.id, len(_globals), ContractType(item_name), True)
@@ -336,7 +338,7 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
             typ = parse_type(item.annotation.args[0], 'storage', custom_units=_custom_units)
         if "IFL" not in item_attributes :
             raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
-        _IFLs[item.target.id] = item_attributes["IFL"]
+        _IFLs[item.target.id] = {"name": item_attributes["IFL"], "pos" : str(item.lineno) + ":" + str(item.col_offset)}
         _globals[item.target.id] = VariableRecord(item.target.id, len(_globals), typ, True)
         # Adding getters here
         for getter in mk_getter(item.target.id, typ):
@@ -348,7 +350,7 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
             parse_type(item.annotation, 'storage', custom_units=_custom_units),
             True
         )
-    return _custom_units, _contracts, _events, _globals, _getters, _IFLs
+    return _custom_units, _contracts, _events, _globals, _getters, _IFLs, _cons
 
 def add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, item):
     item_attributes = {"public": False}
@@ -471,6 +473,7 @@ def if_get_contracts_and_defs_and_globals(code):
     _defs = []
     _getters = []
     _IFLs = {}
+    _cons = []
     _custom_units = []
 
     for item in code:
@@ -482,7 +485,7 @@ def if_get_contracts_and_defs_and_globals(code):
         # Statements of the form:
         # variable_name: type
         elif isinstance(item, ast.AnnAssign):
-            _custom_units, _contracts, _events, _globals, _getters, _IFLs = if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, item)
+            _custom_units, _contracts, _events, _globals, _getters, _IFLs, _cons = if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, _cons, item)
         # Function definitions
         elif isinstance(item, ast.FunctionDef):
             if item.name in _globals:
@@ -490,7 +493,7 @@ def if_get_contracts_and_defs_and_globals(code):
             _defs.append(item)
         else:
             raise StructureException("Invalid top-level statement", item)
-    return _contracts, _events, _defs + _getters, _globals, _custom_units, _IFLs
+    return _contracts, _events, _defs + _getters, _globals, _custom_units, _IFLs, _cons
 
 # Header code
 initializer_list = ['seq', ['mstore', 28, ['calldataload', 0]]]
@@ -724,11 +727,10 @@ def if_gen_cons_from_func(_def, _func_callers, _func_augs, _cons, IFLs) :
 
 # Main python parse tree => LLL method
 def if_parse_tree_to_lll(code, origcode, runtime_only=False):
-    _contracts, _events, _defs, _globals, _custom_units, IFLs = if_get_contracts_and_defs_and_globals(code)
+    _contracts, _events, _defs, _globals, _custom_units, IFLs, _cons = if_get_contracts_and_defs_and_globals(code)
 
     _func_callers = {}
     _func_augs = {}
-    _cons = []
     for _def in _defs :
         _func_callers, _func_augs = if_get_func_caller_and_augs_labels(_def, _func_callers, _func_augs)
 

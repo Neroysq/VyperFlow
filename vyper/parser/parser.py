@@ -254,13 +254,27 @@ def get_item_name_and_attributes(item, attributes):
             if item.func.id == 'IFL' : #TODO: implement IFL func parse
                 if len(item.args) != 2 :
                     raise StructureException("IFL expects two args instead of %s" % len(item.args))
-                attributes[item.func.id] = IF_utils.evaluate(item.args[1])
+                attributes[item.func.id] = IF_utils.eval_label(item.args[1])
                 return get_item_name_and_attributes(item.args[0], attributes)
             raise StructureException("%s expects one arg (the type)" % item.func.id)
         return get_item_name_and_attributes(item.args[0], attributes)
     return None, attributes
 
-def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, _cons, item):
+def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, IFLs, _cons, item):
+    def if_new_global_variable(id, pos, label, IFLs, _cons) :
+        #if_new_global_variable(item.target.id, str(item.lineno) + ":" + str(item.col_offset), item_attributes["IFL"])
+        IFLs[id] = {
+            #"name": item_attributes["IFL"],
+            "pos" : pos
+            "const" : True
+        }
+        if_label, IFLs = IF_utils.eval_label(label, IFLs)
+        if_target_label = {
+            "meet" : False,
+            "principals" : [id]
+        }
+        _cons.append(IF_utils.new_cons(if_label, if_target_label, pos))
+        return IFLs, _cons
     item_attributes = {"public": False}
     if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
         item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
@@ -321,8 +335,7 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
         _contracts[item.target.id] = add_contract(premade_contract.body)
         if "IFL" not in item_attributes :
             raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
-        _IFLs[item.target.id] = {"name": item_attributes["IFL"], "pos" : str(item.lineno) + ":" + str(item.col_offset)}
-        _cons.append(IF_utils.)
+        IFLs, _cons = if_new_global_variable(item.target.id, getpos(item), item_attributes["IFL"], IFLs, _cons)
         _globals[item.target.id] = VariableRecord(item.target.id, len(_globals), BaseType('address'), True)
     elif item_name in _contracts:
         _globals[item.target.id] = ContractRecord(item.target.id, len(_globals), ContractType(item_name), True)
@@ -338,19 +351,22 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
             typ = parse_type(item.annotation.args[0], 'storage', custom_units=_custom_units)
         if "IFL" not in item_attributes :
             raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
-        _IFLs[item.target.id] = {"name": item_attributes["IFL"], "pos" : str(item.lineno) + ":" + str(item.col_offset)}
+        IFLs, _cons = if_new_global_variable(item.target.id, getpos(item), item_attributes["IFL"], IFLs, _cons)
         _globals[item.target.id] = VariableRecord(item.target.id, len(_globals), typ, True)
         # Adding getters here
         for getter in mk_getter(item.target.id, typ):
             _getters.append(parse_line('\n' * (item.lineno - 1) + getter))
             _getters[-1].pos = getpos(item)
     else:
+        if "IFL" not in item_attributes :
+            raise VariableDeclarationException("Variable %s declared without information flow label", item.target.id)
+        IFLs, _cons = if_new_global_variable(item.target.id, getpos(item), item_attributes["IFL"], IFLs, _cons)
         _globals[item.target.id] = VariableRecord(
             item.target.id, len(_globals),
             parse_type(item.annotation, 'storage', custom_units=_custom_units),
             True
         )
-    return _custom_units, _contracts, _events, _globals, _getters, _IFLs, _cons
+    return _custom_units, _contracts, _events, _globals, _getters, IFLs, _cons
 
 def add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, item):
     item_attributes = {"public": False}
@@ -472,7 +488,7 @@ def if_get_contracts_and_defs_and_globals(code):
     _globals = {}
     _defs = []
     _getters = []
-    _IFLs = {}
+    IFLs = {}
     _cons = []
     _custom_units = []
 
@@ -485,7 +501,7 @@ def if_get_contracts_and_defs_and_globals(code):
         # Statements of the form:
         # variable_name: type
         elif isinstance(item, ast.AnnAssign):
-            _custom_units, _contracts, _events, _globals, _getters, _IFLs, _cons = if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, _IFLs, _cons, item)
+            _custom_units, _contracts, _events, _globals, _getters, IFLs, _cons = if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, IFLs, _cons, item)
         # Function definitions
         elif isinstance(item, ast.FunctionDef):
             if item.name in _globals:
@@ -493,7 +509,7 @@ def if_get_contracts_and_defs_and_globals(code):
             _defs.append(item)
         else:
             raise StructureException("Invalid top-level statement", item)
-    return _contracts, _events, _defs + _getters, _globals, _custom_units, _IFLs, _cons
+    return _contracts, _events, _defs + _getters, _globals, _custom_units, IFLs, _cons
 
 # Header code
 initializer_list = ['seq', ['mstore', 28, ['calldataload', 0]]]
@@ -578,78 +594,193 @@ def parse_other_functions(o, otherfuncs, _globals, sigs, external_contracts, ori
         o.append(['return', 0, ['lll', sub, 0]])
         return o
 
-def if_get_func_caller_and_augs_labels(_def, _func_caller, _func_augs) :
+def if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons) :
     WithIFL = False
     for decorator in _def.decorator_list :
         if len(decorator.id) > 4 and decorator.id[:4] == "IFL_" :
             WithIFL = True
-            _func_caller[_def.name] = IF_utils.evaluate(decorator[5:])
+            lb_name = _def.name + "..begin"
+            pos = getpos(decorator)
+            IFLs[lb_name] = {
+                "pos" : pos,
+                "const" : True
+            }
+            if_label, IFLs = IF_utils.eval_label(decorator[5:])
+            _cons.append(IF_utils.new_cons(if_label, lb_name, pos))
             break
     if not WithIFL :
-        raise StructureException("function %s definition without information flow label" % _def.name)
+        IFLs[_def.name + "..begin"] = {"pos" : None, "const" : True}
+        #raise StructureException("function %s definition without information flow label" % _def.name)
+
+    #TODO: support explicit end-label of func
+    IFLs[_def.name + "..end"] = {"pos" : None, "const" : True}
+
     augs = []
     for aug in _def.args.args :
+        lb_name = _def.name + "." + aug.arg
+        pos = getpos(aug)
         if not (isinstance(aug.annotation, ast.Call) and aug.annotation.func.id == "IFL") :
-            raise StructureException("aug declaration %s without information flow label in func %s" % (aug.arg, _def.name))
-        augs.append([aug.arg, IF_utils.evaluate(aug.annotation.func.args[1])])
+            #raise StructureException("aug declaration %s without information flow label in func %s" % (aug.arg, _def.name))
+            IFLs[lb_name] = {"pos" : pos, "const" : True}
+        else :
+            IFLs[lb_name] = {"pos" : pos, "const" : True}
+            if_label, IFLs = IF_utils.eval_label(aug.annotation.func.args[1])
+            _cons.append(IF_utils.new_cons(if_label, lb_name, pos))
+        augs.append(lb_name)
     _func_augs[_def.name] = augs
 
-    return _func_caller, _func_augs
+    return _func_augs, IFLs, _cons
 
-def if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs) :
+def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
+    if isinstance(node, ast.Num) or isinstance(node, ast.Str) or isinstance(node, ast.FormattedValue) or isinstance(node, ast.Bytes):
+        pos = getpos(node)
+        l_result = pc + ".cst." + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos" : pos, "const" : False}
+        _cons.append(IF_utils.new_cons(l_result, pc, pos))
+        return l_result, _cons, IFLs
+
+    if isinstance(node, ast.List) or isinstance(node, ast.Tuple) :
+        pos = getpos(node)
+        l_result = pc + ".lst." + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos" : pos, "const" : False}
+        _cons.append(IF_utils.new_cons(l_result, pc, pos))
+        for ele in node.elts :
+            l_unit, _cons, IFLs = if_parse_expr(ele, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(ele)))
+        return l_result, _cons, IFLs
+
+
+    if isinstance(node, ast.Dict) :
+        pos = getpos(node)
+        l_result = pc + ".dict." + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos" : pos, "const" : False}
+        _cons.append(IF_utils.new_cons(l_result, pc, pos))
+        for value in node.values :
+            l_unit, _cons, IFLs = if_parse_expr(value, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(value)))
+        return l_result, _cons, IFLs
+
+    if isinstance(node, ast.Name) :
+        if node.id in _func_augs :
+            l_result = _func_augs[_def.name][node.id]
+        else :
+            l_result = IFLs[node.id]
+        _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+        return l_result, _cons, IFLs
+
     if isinstance(node, ast.Expr) :
-        return if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+        return if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
 
     if isinstance(node, ast.UnaryOp) :
-        return if_parse_expr(node.operand, _func_callers, _func_augs, _cons, IFLs)
+        return if_parse_expr(node.operand, _func_augs, _cons, IFLs, _def, pc)
     elif isinstance(node, ast.BinOp) :
-        lpc, _cons = if_parse_expr(node.left, _func_callers, _func_augs, _cons, IFLs)
-        rpc, _cons = if_parse_expr(node.right, _func_callers, _func_augs, _cons, IFLs)
-        return IF_utils.conjuction(lpc, rpc), _cons
+        ll, _cons = if_parse_expr(node.left, _func_augs, _cons, IFLs, _def,  pc)
+        #_cons.append(IF_utils.new_cons(ll, pc, getpos(node.left)))
+        rl, _cons = if_parse_expr(node.right, _func_augs, _cons, IFLs, _def, pc)
+        #_cons.append(IF_utils.new_cons(rl, pc, getpos(node.right)))
+        pos = getpos(node)
+        l_result = _def.name + '.bi.' + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos":pos, "const":False}
+        _cons.append(IF_utils.new_cons(l_result, ll, pos))
+        _cons.append(IF_utils.new_cons(l_result, rl, pos))
+        return l_result, _cons, IFLs
     elif isinstance(node, ast.BoolOp) :
-        npc = IF_utils.bottom()
+        pos = getpos(node)
+        l_result = _def.name + '.bool.' + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos":pos, "const":False}
         for value in node.values :
-            tpc, _cons = if_parse_expr(value, _func_callers, _func_augs, _cons, IFLs)
-            npc = IF_utils.conjuction(tpc, npc)
-        return npc, _cons
+            l_unit, _cons, IFLs = if_parse_expr(value, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(value)))
+        return l_result, _cons, IFLs
     elif isinstance(node, ast.Compare) :
-        npc, _cons = if_parse_expr(node.left, _func_callers, _func_augs, _cons, IFLs)
+        pos = getpos(node)
+        l_result = _def.name + '.cp.' + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos":pos, "const":False}
+        l_unit, _cons, IFLs = if_parse_expr(node.left, _func_augs, _cons, IFLs, _def, pc)
+        _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(node.left)))
         for value in node.comparators :
-            tpc, _cons = if_parse_expr(value, _func_callers, _func_augs, _cons, IFLs)
-            npc = IF_utils.conjuction(tpc, npc)
-        return npc, _cons
+            l_unit, _cons, IFLs = if_parse_expr(value, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(value)))
+        return l_result, _cons, IFLs
     elif isinstance(node, ast.Call) :
-        #TODO: generate constraints for caller
+        if node.func.id == "endorse" :
+            if len(node.func.args) != 3 :
+                raise StructureException("endorse needs exactly 3 args")
+            l_from, IFLs = IF_utils.eval_label(node.func.args[1], IFLs)
+            l_to, IFLs = IF_utils.eval_label(node.func.args[2], IFLs)
+            l_orig, _cons, IFLs = if_parse_expr(node.func.args[0], _func_augs, _cons, IFLs, _def, pc)
+            pos = getpos(node)
+            l_result = pc + '.endorse.' + IF_utils.pos_str(pos)
+            IFLs[l_result] = {"pos" : pos, "const" : False}
+
+            _cons.append(IF_utils.new_cons(l_from, l_orig, getpos(node.func.args[1])))
+            _cons.append(IF_utils.new_cons(l_to, l_result, getpos(node.func.args[2])))
+            _cons.append(IF_utils.new_cons(l_orig, l_result, pos))
+        else :
+            funcname = node.func.id
+            l_begin = IFLs[funcname + "..begin"]
+            l_end = IFLs[funcname + "..end"]
+            l_result = _def.name + '.bi.' + IF_utils.pos_str(pos)
+            IFLs[l_result] = {"pos":pos, "const":False}
+
+            pos = getpos(node)
+            _cons.append(IF_utils.new_cons(l_begin, pc, pos))
+            _cons.append(IF_utils.new_cons(l_result, l_end, pos))
+
+            for (index, arg) in enumerate(node.func.args) :
+
+                l_arg = _func_augs[funcname][index]
+                l_value, _cons, IFLs = if_parse_expr(arg, _func_augs, _cons, IFLs, _def, pc)
+                _cons.append(IF_utils.new_cons(l_arg, l_value, pos))
+
+        return l_result, _cons, IFLs
+
     elif isinstance(node, ast.keyword) :
-        npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
-        return npc, _cons
+        raise StructureException("keyword assign not supported")
+        #npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+        #return npc, _cons
     elif isinstance(node, ast.IfExp) :
+        raise StructureException("a if b else c not supported")
         #TODO
         continue
     elif isinstance(node, ast.Attribute) :
         if node.value.id == 'self' :
-            npc = IFLs[node.attr]
+            l_result = IFLs[node.attr]
+            _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+        elif node.value.id == "msg" :
+            l_result = IFLs[IF_utils.principal_trans("sender")]
+            _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
         else :
-            npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+            l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
 
-        return npc, _cons
+        return l_result, _cons, IFLs
+
     elif isinstance(node, ast.Subscript) :
+        l_value, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
+        pos = getpos(node)
+        l_result = pc + ".slice." + IF_utils.pos_str(pos)
+        IFLs[l_result] = {"pos":pos, "const":False}
+        _cons.append(IF_utils.new_cons(l_result, l_value, pos))
+
         if isinstance(node.slice, ast.Index) :
-            npc, _cons = if_parse_expr(node.slice.value, _func_callers, _func_augs, _cons, IFLs)
+            l_index, _cons, IFLs = if_parse_expr(node.slice.value, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_result, l_index, getpos(node.slice)))
         elif isinstance(node.slice, ast.Slice) :
-            lpc, _cons = if_parse_expr(node.slice.lower, _func_callers, _func_augs, _cons, IFLs)
-            upc, _cons = if_parse_expr(node.slice.upper, _func_callers, _func_augs, _cons, IFLs)
-            spc, _cons = if_parse_expr(node.slice.step, _func_callers, _func_augs, _cons, IFLs)
-            npc = IF_utils.conjuction(IF_utils.conjuction(lpc, upc), spc)
+            lpc, _cons, IFLs = if_parse_expr(node.slice.lower, _func_augs, _cons, IFLs, _def, pc)
+            upc, _cons, IFLs = if_parse_expr(node.slice.upper, _func_augs, _cons, IFLs, _def, pc)
+            spc, _cons, IFLs = if_parse_expr(node.slice.step, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_result, lpc, getpos(node.slice.lower)))
+            _cons.append(IF_utils.new_cons(l_result, upc, getpos(node.slice.upper)))
+            _cons.append(IF_utils.new_cons(l_result, spc, getpos(node.slice.step)))
 
-        return npc, _cons
+        return l_result, _cons, IFLs
 
-    elif isinstance(node, ast.conprehension) :
+    elif isinstance(node, ast.comprehension) :
         # TODO:
-        continue
+        raise StructureException("comprehension not supported")
 
 
-def if_parse_sentence(node, _func_callers, _func_augs, _cons, IFLs, pc) :
+def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
 """
     ast.Expr: self.expr,
     ast.Pass: self.parse_pass,
@@ -666,89 +797,122 @@ def if_parse_sentence(node, _func_callers, _func_augs, _cons, IFLs, pc) :
 """
 
     if isinstance(node, ast.Expr) :
-        npc, _cons = if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs)
+        l_result, _cons, IFLs = if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc)
         #pc = IF_utils.conjuction(pc, npc)
     elif isinstance(node, ast.Assign) :
+        raise StructureException("keyword assign not supported")
         for target in node.targets :
             if target.id in _func_augs :
-                llb = _func_augs[target.id]
+                llb = IFLs[_def.name + "." + target.id]
             else :
                 llb = IFLs[target.id]
-            npc, _cons = if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs)
-            _cons.append(IF_utils.setCons(llb, npc))
+            l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(llb, l_result, getpos(node)))
+            #_cons.append(IF_utils.new_cons(llb, pc, getpos(node)))
 
     elif isinstance(node, ast.If) :
-        npc, _cons = if_parse_expr(node.test, _func_callers, _func_augs, _cons, IFLs)
-        npc = IF_utils.conjuction(pc, npc)
+        l_result, _cons, IFLs = if_parse_expr(node.test, _func_augs, _cons, IFLs, _def, pc)
+        l_if = pc + "..if." + IF_utils.pos_str(getpos(node))
+        IFLs[l_if] = {"pos", getpos(node), "const" : False}
+        _cons.append(IF_utils.new_cons(l_if, l_result, getpos(node)))
+        #_cons.append(IF_utils.new_cons(l_if, pc, getpos(node)))
+
+        _func_augs_backup = copy.copy(_func_augs[_def.name])
+
         for nnode in node.body :
-            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
-
-
-        npc, _cons = if_parse_expr(node.test, _func_callers, _func_augs, _cons, IFLs)
-        npc = IF_utils.conjuction(pc, npc)
+            _cons, IFLs = if_parse_sentence(nnode, _func_augs, _cons, IFLs, _def, l_if)
         for nnode in node.orelse :
-            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+            _cons, IFLs = if_parse_sentence(nnode, _func_augs, _cons, IFLs, _def, l_if)
+
+        _func_augs[_def.name] = _func_augs_backup
 
     elif isinstance(node, ast.assert) :
-        npc, _cons = if_parse_expr(node.test, _func_callers, _func_augs, _cons, IFLs)
+        l_result, _cons, IFLs = if_parse_expr(node.test, _func_augs, _cons, IFLs, _def, pc)
     elif isinstance(node, ast.Call) :
-        npc, _cons = if_parse_expr(node, _func_callers, _func_augs, _cons, IFLs)
+        l_result, _cons, IFLs = if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc)
 
     elif isinstance(node, ast.For) :
-        #TODO: add local var
-        npc, _cons = if_parse_expr(node.iter, _func_callers, _func_augs, _cons, IFLs)
-        npc = IF_utils.conjuction(pc, npc)
+        l_result, _cons, IFLs = if_parse_expr(node.iter, _func_augs, _cons, IFLs, _def, pc)
+        l_for = pc + "..for." + IF_utils.pos_str(getpos(node))
+        IFLs[l_for] = {"pos", getpos(node), "const" : False}
+        _cons.append(IF_utils.new_cons(l_for, l_result, getpos(node)))
+        #_cons.append(IF_utils.new_cons(l_for, pc, getpos(node)))
+        l_target = l_for + node.target.id
+        IFLs[l_result] = {"pos", getpos(node.target), "const" : False}
+        _cons.append(IF_utils.new_cons(l_target, l_result, getpos(node)))
+
+        _func_augs_backup = copy.copy(_func_augs[_def.name])
+        _func_augs[_def.name][node.target.id] = l_target
+
         for nnode in node.body :
-            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+             _cons, IFLs = if_parse_sentence(nnode, _func_augs, _cons, IFLs, _def, l_for)
 
+        _func_augs[_def.name] = _func_augs_backup
 
-        npc, _cons = if_parse_expr(node.iter, _func_callers, _func_augs, _cons, IFLs)
-        npc = IF_utils.conjuction(pc, npc)
+        _func_augs_backup = copy.copy(_func_augs[_def.name])
+        _func_augs[_def.name][node.target.id] = l_target
+
         for nnode in node.orelse :
-            npc, _cons, IFLs = if_parse_sentence(nnode, _func_callers, _func_augs, _cons, IFLs, npc)
+            _cons, IFLs = if_parse_sentence(nnode, _func_augs, _cons, IFLs, _def, l_for)
+
+        _func_augs[_def.name] = _func_augs_backup
+
+    elif isinstance(node, ast.AnnAssign) :
+        l_var = pc + "." + node.target.id
+        pos = getpos(node)
+        if isinstance(node.annotation, ast.Call) and node.annotation.func.id == "IFL":
+            IFLs[l_var] = {"pos" : pos, "const" : True} #TODO: const?
+            if_label, IFLs = IF_utils.eval_label(node.annotation.args[1], IFLs)
+            if_target_label = {"meet" : False,  "principals" : [id]}
+            _cons.append(IF_utils.new_cons(if_label, if_target_label, pos))
+        else :
+            IFLs[l_var] = {"pos" : pos, "const" : False}
+        _cons.append(IF_utils.new_cons(l_var, pc, pos))
+        _func_augs[_def.name][node.target.id] = l_var
 
     elif isinstance(node, ast.AugAssign) :
-        npc, _cons = if_parse_expr(node.value, _func_callers, _func_augs, _cons, IFLs)
+        lbl, _cons, IFLs = if_parse_expr(node.target, _func_augs, _cons, IFLs, pc)
+        l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, pc)
+        _cons.append(IF_utils.new_cons(lbl, l_result, getpos(node)))
+        #_cons.append(IF_utils.new_cons(lbl, pc, getpos(node)))
 
     elif isinstance(node, ast.Break) :
-        continue
+        pass
+
     elif isinstance(node, ast.Continue) :
-        continue
+        pass
+
     elif isinstance(node, ast.Return) :
-        continue
+        pos = getpos(node)
+        l_result, _cons, _IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, pc)
+        l_end = _def.name + "..end"
+        _cons.append(IF_utils.new_cons(l_end, l_result, pos))
+        #_cons.append(IF_utils.new_cons(l_end, pc, pos))
 
-    return pc, _cons, IFLs
+    return _cons, IFLs
 
-def if_gen_cons_from_func(_def, _func_callers, _func_augs, _cons, IFLs) :
-    #TODO: deal with local var declaration
-    pc = _func_callers[_def.name]
+def if_gen_cons_from_func(_def, _func_augs, _cons, IFLs) :
     for node in _def.body :
-        pc, _cons, IFLs = if_parse_sentence(node, _def, _func_callers, _func_augs, _cons, IFLs, pc)
+        _cons, IFLs = if_parse_sentence(node, _func_augs, _cons, IFLs, _def, _def.name + "..begin")
 
 # Main python parse tree => LLL method
 def if_parse_tree_to_lll(code, origcode, runtime_only=False):
     _contracts, _events, _defs, _globals, _custom_units, IFLs, _cons = if_get_contracts_and_defs_and_globals(code)
 
-    _func_callers = {}
-    """
-        "funcname" :
-            {
-                "begin-label-pc" : ,
-                "end-label-pc" :,
-            }
-    """
+    #init setting
+    l_sender = IF_utils.principal_trans("sender")
+    if l_sender not in IFLs :
+        IFLs[l_sender] = {"pos" : None, "const" : True}
+
     _func_augs = {}
     """
-        "funcname" :
-            {
-                "aug-name" : ,
-            }
+        funcname : {aug-name : IFLname}
     """
     for _def in _defs :
-        _func_callers, _func_augs, IFLs, _cons = if_get_func_caller_and_augs_labels(_def, _func_callers, _func_augs, IFLs, _cons)
+        _func_augs, IFLs, _cons = if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons)
 
     for _def in _defs :
-        _cons, IFLs = if_gen_cons_from_func(_def, _func_callers, _func_augs, _cons, IFLs)
+        _cons, IFLs = if_gen_cons_from_func(_def, _func_augs, _cons, IFLs)
 
     return if_printer(IFLs, _func_callers, _func_augs, _cons)
 

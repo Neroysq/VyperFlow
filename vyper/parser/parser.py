@@ -895,6 +895,33 @@ def if_gen_cons_from_func(_def, _func_augs, _cons, IFLs) :
     for node in _def.body :
         _cons, IFLs = if_parse_sentence(node, _func_augs, _cons, IFLs, _def, _def.name + "..begin")
 
+def if_printer(IFLs, _cons) :
+    output = ""
+    #CONSTRUCTOR part
+    for lname, lvalue in IFLs.items() :
+        if lvalue["const"] :
+            s = ["CONSTRUCTOR", IF_utils.to_sherrlocname(lname), "0"]
+            if lvalue["pos"] is not None :
+                s.append("// " + IF_utils.pos_str(lvalue["pos"]))
+            s = " ".join(s)
+            output += s + '\n'
+
+    #bound
+    output += "\n%%\n"
+    for lname, lvalue in IFLs.items() :
+        b = " ".join(["_", "<=", IF_utils.to_sherrlocname(lname), "\n"])
+        t = " ".join([IF_utils,to_sherrlocname(lname), "<=", "*", "\n"])
+        output += b + t
+
+    #constraints
+    output += "\n%%\n"
+    for con in _cons :
+        l = "(" + IF_utils.to_sherrlocexp(con["left"]) + ")"
+        r = "(" + IF_utils.to_sherrlocexp(con["right"]) + ")"
+        p = IF_utils.pos_str(con["pos"])
+        #TODO: add position info
+        output += l + "<=" + r + ";"
+
 # Main python parse tree => LLL method
 def if_parse_tree_to_lll(code, origcode, runtime_only=False):
     _contracts, _events, _defs, _globals, _custom_units, IFLs, _cons = if_get_contracts_and_defs_and_globals(code)
@@ -914,7 +941,7 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
     for _def in _defs :
         _cons, IFLs = if_gen_cons_from_func(_def, _func_augs, _cons, IFLs)
 
-    return if_printer(IFLs, _func_callers, _func_augs, _cons)
+    return if_printer(IFLs, _cons)
 
     _names = [_def.name for _def in _defs] + [_event.target.id for _event in _events]
     # Checks for duplicate function / event names

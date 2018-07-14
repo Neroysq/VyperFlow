@@ -20,3 +20,16 @@ def eval_label(exp, IFLs) :
 
 def principal_trans(s) :
     return "@" + s
+
+def to_sherrlocname(s) :
+    if s[0] == "@" :
+        return "P_" + s[1:]
+    else :
+        return s
+
+def to_sherrlocexp(exp) :
+    if type(exp) == str :
+        return to_sherrlocname(exp)
+    op = " ⊓ " if exp["meet"] else " ⊔ "
+    return op.join(set(exp["principals"]))
+

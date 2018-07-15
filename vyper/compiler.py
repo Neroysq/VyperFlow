@@ -3,6 +3,11 @@ from . import compile_lll
 from . import optimizer
 
 
+def if_compile(code) :
+    output = parser.if_parse_tree_to_lll(parser.if_parse(code), code)
+    print("succ.")
+    return output
+
 def compile(code, *args, **kwargs):
     lll = optimizer.optimize(parser.parse_tree_to_lll(parser.parse(code), code, runtime_only=kwargs.get('bytecode_runtime', False)))
     asm = compile_lll.compile_to_assembly(lll)

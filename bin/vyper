@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description='Vyper {0} programming language for
 parser.add_argument('input_file', help='Vyper sourcecode to compile')
 parser.add_argument('-f', help='Format to print', choices=['abi', 'json', 'bytecode', 'bytecode_runtime', 'ir', 'asm'], default='bytecode', dest='format')
 parser.add_argument('--show-gas-estimates', help='Show gas estimates in ir output mode.', action="store_true")
+parser.add_argument('-o', help='File to output', dest='output')
 
 args = parser.parse_args()
 
@@ -49,7 +50,14 @@ if __name__ == '__main__':
         elif args.format == 'json':
             print(json.dumps(compiler.mk_full_signature(code)))
         elif args.format == 'bytecode':
-            print('0x' + compiler.compile(code).hex())
+            #vyperflow
+            result = compiler.if_compile(code)
+            if args.output is not None :
+                with open(args.output, "w") as output_file :
+                    output_file.write(result)
+            else :
+                print(result)
+            #print('0x' + compiler.compile(code).hex())
         elif args.format == 'bytecode_runtime':
             print('0x' + compiler.compile(code, bytecode_runtime=True).hex())
         elif args.format == 'ir':

@@ -30,6 +30,7 @@ def to_sherrlocname(s) :
 def to_sherrlocexp(exp) :
     if type(exp) == str :
         return to_sherrlocname(exp)
+    print(exp)
     op = " ⊓ " if exp["meet"] else " ⊔ "
     return op.join(set(exp["principals"]))
 

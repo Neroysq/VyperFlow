@@ -241,6 +241,27 @@ def add_contract(code):
             raise StructureException("Invalid contract reference", item)
     return _defs
 
+def if_get_item_name_and_attributes(item, attributes, IFLs):
+    if isinstance(item, ast.Name):
+        return item.id, attributes, IFLs
+    elif isinstance(item, ast.AnnAssign):
+        return if_get_item_name_and_attributes(item.annotation, attributes, IFLs)
+    elif isinstance(item, ast.Subscript):
+        return if_get_item_name_and_attributes(item.value, attributes, IFLs)
+    # elif ist
+    elif isinstance(item, ast.Call):
+        attributes[item.func.id] = True
+        # Raise for multiple args
+        if len(item.args) != 1:
+            if item.func.id == 'IFL' : #TODO: implement IFL func parse
+                if len(item.args) != 2 :
+                    raise StructureException("IFL expects two args instead of %s" % len(item.args))
+                attributes[item.func.id] = item.args[1]
+                return if_get_item_name_and_attributes(item.args[0], attributes, IFLs)
+            raise StructureException("%s expects one arg (the type)" % item.func.id)
+        return if_get_item_name_and_attributes(item.args[0], attributes, IFLs)
+    return None, attributes, IFLs
+
 
 def get_item_name_and_attributes(item, attributes):
     if isinstance(item, ast.Name):
@@ -257,7 +278,6 @@ def get_item_name_and_attributes(item, attributes):
             if item.func.id == 'IFL' : #TODO: implement IFL func parse
                 if len(item.args) != 2 :
                     raise StructureException("IFL expects two args instead of %s" % len(item.args))
-                attributes[item.func.id] = IF_utils.eval_label(item.args[1])
                 return get_item_name_and_attributes(item.args[0], attributes)
             raise StructureException("%s expects one arg (the type)" % item.func.id)
         return get_item_name_and_attributes(item.args[0], attributes)
@@ -276,10 +296,11 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
         if_label, IFLs = IF_utils.eval_label(label, IFLs)
         if_target_label = id
         _cons.append(IF_utils.new_cons(if_label, if_target_label, pos))
+        _cons.append(IF_utils.new_cons(if_target_label, if_label, pos))
         return IFLs, _cons
     item_attributes = {"public": False}
     if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
-        item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
+        item_name, item_attributes, IFLs = if_get_item_name_and_attributes(item, item_attributes, IFLs)
         if not all([attr in valid_global_keywords for attr in item_attributes.keys()]):
             raise StructureException('Invalid global keyword used: %s' % item_attributes, item)
     if item.value is not None:
@@ -612,8 +633,9 @@ def if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons) :
                 "pos" : pos,
                 "const" : True
             }
-            if_label, IFLs = IF_utils.eval_label(decorator[5:])
+            if_label, IFLs = IF_utils.eval_label(decorator.id[4:], IFLs)
             _cons.append(IF_utils.new_cons(if_label, lb_name, pos))
+            _cons.append(IF_utils.new_cons(lb_name, if_label, pos))
             break
     if not WithIFL :
         IFLs[_def.name + "..begin"] = {"pos" : None, "const" : True}
@@ -622,23 +644,29 @@ def if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons) :
     #TODO: support explicit end-label of func
     IFLs[_def.name + "..end"] = {"pos" : None, "const" : True}
 
+    print("func args begin")
     augs = []
     vars = {}
     for aug in _def.args.args :
+        #print(aug)
         lb_name = _def.name + "." + aug.arg
         pos = getpos(aug)
+        #print(pos)
         if not (isinstance(aug.annotation, ast.Call) and aug.annotation.func.id == "IFL") :
             #raise StructureException("aug declaration %s without information flow label in func %s" % (aug.arg, _def.name))
             IFLs[lb_name] = {"pos" : pos, "const" : True}
         else :
             IFLs[lb_name] = {"pos" : pos, "const" : True}
-            if_label, IFLs = IF_utils.eval_label(aug.annotation.func.args[1])
+            if_label, IFLs = IF_utils.eval_label(aug.annotation.args[1], IFLs)
             _cons.append(IF_utils.new_cons(if_label, lb_name, pos))
+            _cons.append(IF_utils.new_cons(lb_name, if_label, pos))
 
+        #print("bp")
         vars[aug.arg] = lb_name
         augs.append(lb_name)
+        #print(lb_name)
     _func_augs[_def.name] = [augs, vars]
-
+    print("func args done")
     return _func_augs, IFLs, _cons
 
 def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
@@ -720,17 +748,17 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         return l_result, _cons, IFLs
     elif isinstance(node, ast.Call) :
         if node.func.id == "endorse" :
-            if len(node.func.args) != 3 :
+            if len(node.args) != 3 :
                 raise StructureException("endorse needs exactly 3 args")
-            l_from, IFLs = IF_utils.eval_label(node.func.args[1], IFLs)
-            l_to, IFLs = IF_utils.eval_label(node.func.args[2], IFLs)
-            l_orig, _cons, IFLs = if_parse_expr(node.func.args[0], _func_augs, _cons, IFLs, _def, pc)
+            l_from, IFLs = IF_utils.eval_label(node.args[1], IFLs)
+            l_to, IFLs = IF_utils.eval_label(node.args[2], IFLs)
+            l_orig, _cons, IFLs = if_parse_expr(node.args[0], _func_augs, _cons, IFLs, _def, pc)
             pos = getpos(node)
             l_result = pc + '.endorse.' + IF_utils.pos_str(pos)
             IFLs[l_result] = {"pos" : pos, "const" : False}
 
-            _cons.append(IF_utils.new_cons(l_from, l_orig, getpos(node.func.args[1])))
-            _cons.append(IF_utils.new_cons(l_to, l_result, getpos(node.func.args[2])))
+            _cons.append(IF_utils.new_cons(l_from, l_orig, getpos(node.args[1])))
+            _cons.append(IF_utils.new_cons(l_to, l_result, getpos(node.args[2])))
             _cons.append(IF_utils.new_cons(l_orig, l_result, pos))
         else :
             #TODO: build-in func analysis
@@ -748,7 +776,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
             _cons.append(IF_utils.new_cons(l_begin, pc, pos))
             _cons.append(IF_utils.new_cons(l_result, l_end, pos))
 
-            for (index, arg) in enumerate(node.func.args) :
+            for (index, arg) in enumerate(node.args) :
 
                 l_arg = _func_augs[funcname][0][index]
                 l_value, _cons, IFLs = if_parse_expr(arg, _func_augs, _cons, IFLs, _def, pc)
@@ -931,7 +959,7 @@ def if_printer(IFLs, _cons) :
     output = ""
     #CONSTRUCTOR part
     for lname, lvalue in IFLs.items() :
-        if lvalue["const"] :
+        if IF_utils.is_principal(lname) :
             s = ["CONSTRUCTOR", IF_utils.to_sherrlocname(lname), "0"]
             if lvalue["pos"] is not None :
                 s.append("// " + IF_utils.pos_str(lvalue["pos"]))
@@ -939,14 +967,16 @@ def if_printer(IFLs, _cons) :
             output += s + '\n'
     print(output)
     #bound
+    """
     output += "\n%%\n"
     for lname, lvalue in IFLs.items() :
-        b = " ".join(["_", "<=", IF_utils.to_sherrlocname(lname), "\n"])
-        t = " ".join([IF_utils.to_sherrlocname(lname), "<=", "*", "\n"])
+        b = " ".join(["_", "<=", IF_utils.to_sherrlocname(lname), ";\n"])
+        t = " ".join([IF_utils.to_sherrlocname(lname), "<=", "*", ";\n"])
         output += b + t
     print(output)
+    """
     #constraints
-    output += "\n%%\n"
+    output += "\n\n"
     for con in _cons :
         l = "(" + IF_utils.to_sherrlocexp(con["left"]) + ")"
         r = "(" + IF_utils.to_sherrlocexp(con["right"]) + ")"
@@ -966,6 +996,10 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
     l_sender = IF_utils.principal_trans("sender")
     if l_sender not in IFLs :
         IFLs[l_sender] = {"pos" : None, "const" : True}
+
+    init_vars = ["balance"]
+    for var in init_vars :
+        IFLs[var] = {"pos" : None,  "const" : True}
 
     _func_augs = {}
     """

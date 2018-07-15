@@ -1,0 +1,19 @@
+owner : IFL(address, this)
+
+@public
+def __init__(_owner : address):
+    self.owner = _owner
+
+# Withdraws the specified amount assuming the owner is the one requesting the withdrawl.
+# This requires endorsement of the value in order to send money.
+@public
+@IFL_this
+def withdraw(val : IFL(unit, owner), addr : IFL(address, owner)):
+    if endorse(val <= self.balance, owner, this):
+        send(addr, endorse(val, owner, this))
+
+@pubic
+@payable
+def deposit():
+    # DO NOTHING (anyone can deposit money, we don't mind)
+    pass

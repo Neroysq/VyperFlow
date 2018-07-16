@@ -11,7 +11,8 @@ def __init__(_payer : address, _receiver : address):
 @IFL_this
 # This uses "+" to be the conjunction of two labels
 def close(val : IFL(wei_value, payer_receiver)):
-    send(endorse(self.receiver, receiver, this), endorse(val, payer_receiver, this))
+#   send(endorse(self.receiver, receiver, this), endorse(val, payer_receiver, this))
+    send(endorse(self.receiver, receiver, this), val)
     selfdestruct(endorse(self.payer, payer, this))
 
 @public

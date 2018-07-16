@@ -3,6 +3,8 @@ import tokenize
 import io
 import re
 
+vfdebug=False
+
 from tokenize import (
     OP,
     NAME,
@@ -78,7 +80,8 @@ if not hasattr(ast, 'AnnAssign'):
 # Input: orginal code
 # Output: ifl, ast
 def if_parse(code) :
-    print("parse begin")
+    if vfdebug :
+        print("parse begin")
     code = pre_parser(code)
     o = ast.parse(code)
     decorate_ast_with_source(o, code)
@@ -93,14 +96,16 @@ def parse(code):
     decorate_ast_with_source(o, code)
     o = resolve_negative_literals(o)
     o = strip_off_ifl(o)
-    print("parse succ")
+    if vfdebug:
+        print("parse succ")
     return o.body
 
 class removeIFL(ast.NodeTransformer) :
     def visit_Call(self, node) :
         if node.func.id == "IFL" :
-            print(node)
-            print(node.args[0])
+            if vfdebug :
+                print(node)
+                print(node.args[0])
             return node.args[0]
         elif node.func.id == "endorse" :
             return node.args[0]
@@ -292,9 +297,9 @@ def get_item_name_and_attributes(item, attributes):
     if isinstance(item, ast.Name):
         return item.id, attributes
     elif isinstance(item, ast.AnnAssign):
-        print(item)
+        if vfdebug :
+            print(item)
         tmp = get_item_name_and_attributes(item.annotation, attributes)
-        print("succ")
         return tmp
     elif isinstance(item, ast.Subscript):
         return get_item_name_and_attributes(item.value, attributes)
@@ -335,7 +340,6 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
         raise StructureException('May not assign value whilst defining type', item)
     #IFL begin
     if isinstance(item.annotation, ast.Call) and item.annotation.func.id == 'IFL' :
-        print(item)
         node = ast.AnnAssign()
         node.annotation = item.annotation.args[0]
         node.target = item.target
@@ -343,7 +347,6 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
         node.simple = item.simple
         ast.copy_location(node, item)
         item = node
-        print(item, item_name)
     #IFL end
     if isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event":
         if _globals or len(_defs):
@@ -426,7 +429,6 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
 
 def add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, item):
     item_attributes = {"public": False}
-    print(item)
     if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
         item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
         if not all([attr in valid_global_keywords for attr in item_attributes.keys()]):
@@ -506,7 +508,8 @@ def get_contracts_and_defs_and_globals(code):
     _defs = []
     _getters = []
     _custom_units = []
-    print("top level")
+    if vfdebug :
+        print("top level")
     for item in code:
         # Contract references
         if isinstance(item, ast.ClassDef):
@@ -661,7 +664,8 @@ def if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons) :
     #TODO: support explicit end-label of func
     IFLs[_def.name + "..end"] = {"pos" : None, "const" : True}
 
-    print("func args begin")
+    if vfdebug :
+        print("func args begin")
     augs = []
     vars = {}
     for aug in _def.args.args :
@@ -683,11 +687,13 @@ def if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons) :
         augs.append(lb_name)
         #print(lb_name)
     _func_augs[_def.name] = [augs, vars]
-    print("func args done")
+    if vfdebug :
+        print("func args done")
     return _func_augs, IFLs, _cons
 
 def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
-    print(node)
+    if vfdebug :
+        print(node)
     if isinstance(node, ast.Num) or isinstance(node, ast.Str) or isinstance(node, ast.FormattedValue) or isinstance(node, ast.Bytes) or isinstance(node, ast.NameConstant):
         pos = getpos(node)
         l_result = pc + ".cst." + IF_utils.pos_str(pos)
@@ -717,14 +723,11 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         return l_result, _cons, IFLs
 
     if isinstance(node, ast.Name) :
-        print("name node : %s " % node.id)
-        print(_func_augs[_def.name][1])
         if node.id in _func_augs[_def.name][1] :
             l_result = _func_augs[_def.name][1][node.id]
         else :
             l_result = IFLs[node.id]
         #_cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
-        print("name node end")
         return l_result, _cons, IFLs
 
     if isinstance(node, ast.Expr) :
@@ -733,7 +736,8 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
     if isinstance(node, ast.UnaryOp) :
         return if_parse_expr(node.operand, _func_augs, _cons, IFLs, _def, pc)
     elif isinstance(node, ast.BinOp) :
-        print("BinOp bigin")
+        if vfdebug :
+            print("BinOp bigin")
         ll, _cons, IFLs = if_parse_expr(node.left, _func_augs, _cons, IFLs, _def,  pc)
         #_cons.append(IF_utils.new_cons(ll, pc, getpos(node.left)))
         rl, _cons, IFLs = if_parse_expr(node.right, _func_augs, _cons, IFLs, _def, pc)
@@ -743,7 +747,6 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         IFLs[l_result] = {"pos":pos, "const":False}
         _cons.append(IF_utils.new_cons(l_result, ll, pos))
         _cons.append(IF_utils.new_cons(l_result, rl, pos))
-        print("BinOp end")
         return l_result, _cons, IFLs
     elif isinstance(node, ast.BoolOp) :
         pos = getpos(node)
@@ -813,7 +816,6 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
     elif isinstance(node, ast.IfExp) :
         raise StructureException("a if b else c not supported")
     elif isinstance(node, ast.Attribute) :
-        print("begin")
         if node.value.id == 'self' :
             l_result = node.attr
             _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
@@ -823,7 +825,6 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         else :
             l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
 
-        print("end")
         return l_result, _cons, IFLs
 
     elif isinstance(node, ast.Subscript) :
@@ -866,18 +867,16 @@ def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
     ast.Continue: self.parse_continue,
     ast.Return: self.parse_return,
     """
-    print(node)
+    if vfdebug :
+        print(node)
     import copy
 
     if isinstance(node, ast.Expr) :
         l_result, _cons, IFLs = if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc)
         #pc = IF_utils.conjuction(pc, npc)
     elif isinstance(node, ast.Assign) :
-        #print(node.targets)
         l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
-        #print(node.targets)
         for target in node.targets :
-            #print(target)
             pos = getpos(target)
             l_target = pc + "..assigntgt." + IF_utils.pos_str(pos)
             IFLs[l_target] = {"pos" : pos, "const" : False}
@@ -887,7 +886,6 @@ def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
             #    llb = IFLs[target.id]
             _cons.append(IF_utils.new_cons(l_target, l_result, getpos(node)))
             _cons.append(IF_utils.new_cons(l_target, pc, getpos(node)))
-        print("~assign end")
 
     elif isinstance(node, ast.If) :
         l_result, _cons, IFLs = if_parse_expr(node.test, _func_augs, _cons, IFLs, _def, pc)
@@ -967,11 +965,9 @@ def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
         _cons.append(IF_utils.new_cons(l_end, l_result, pos))
         _cons.append(IF_utils.new_cons(l_end, pc, pos))
 
-    print("sent end")
     return _cons, IFLs
 
 def if_gen_cons_from_func(_def, _func_augs, _cons, IFLs) :
-    print("\n\nchecking a new func\n")
     for node in _def.body :
         _cons, IFLs = if_parse_sentence(node, _func_augs, _cons, IFLs, _def, _def.name + "..begin")
     return _cons, IFLs
@@ -986,7 +982,6 @@ def if_printer(IFLs, _cons) :
                 s.append("// " + IF_utils.pos_str(lvalue["pos"]))
             s = " ".join(s)
             output += s + '\n'
-    print(output)
     #bound
     """
     output += "\n%%\n"
@@ -999,23 +994,22 @@ def if_printer(IFLs, _cons) :
     #constraints
     output += "\n\n"
     for con in _cons :
-        print(con)
         l = IF_utils.to_sherrlocexp(con["left"])
         r = IF_utils.to_sherrlocexp(con["right"])
         p = IF_utils.pos_printer(con["pos"])
-        #TODO: add position info
         output += l + " <= " + r + "; "
         output += "[" + p + "]\n" if p != "" else "\n"
 
-    print("printer done")
     return output
 
 # Main python parse tree => LLL method
 def if_parse_tree_to_lll(code, origcode, runtime_only=False):
-    print("IF checking begins")
+    if vfdebug :
+        print("IF checking begins")
     _contracts, _events, _defs, _globals, _custom_units, IFLs, _cons = if_get_contracts_and_defs_and_globals(code)
 
-    print("globals done")
+    if vfdebug :
+        print("globals done")
     #init setting
     l_sender = IF_utils.principal_trans("sender")
     if l_sender not in IFLs :
@@ -1031,7 +1025,8 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
     """
     for _def in _defs :
         _func_augs, IFLs, _cons = if_get_func_caller_and_augs_labels(_def, _func_augs, IFLs, _cons)
-    print("func args done")
+    if vfdebug :
+        print("func args done")
 
     #init func
     critical_build_in_func = [
@@ -1062,9 +1057,11 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
         _func_augs[fname] = [args, vars]
 
     for _def in _defs :
-        print("entering one func")
+        if vfdebug :
+            print("entering one func")
         _cons, IFLs = if_gen_cons_from_func(_def, _func_augs, _cons, IFLs)
-    print("func checking done")
+    if vfdebug :
+        print("func checking done")
 
     return if_printer(IFLs, _cons)
 

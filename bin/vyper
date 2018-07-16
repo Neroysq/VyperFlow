@@ -9,14 +9,14 @@ from vyper.parser.parser import parse_to_lll
 from vyper.parser import parser_utils
 from vyper import compile_lll
 
-sherrloc = "/home/animula/GitRep/sherrloc/GenErrorDiagnostic/sherrloc"
+sherrloc = "Sherrloc/sherrloc"
 sys.tracebacklimit = 0
 
-parser = argparse.ArgumentParser(description='Vyper {0} programming language for Ethereum'.format(vyper.__version__))
-parser.add_argument('input_file', help='Vyper sourcecode to compile')
-parser.add_argument('-f', help='Format to print', choices=['abi', 'json', 'bytecode', 'bytecode_runtime', 'ir', 'asm'], default='bytecode', dest='format')
-parser.add_argument('--show-gas-estimates', help='Show gas estimates in ir output mode.', action="store_true")
+parser = argparse.ArgumentParser(description='VyperFLow {0} programming language for Ethereum'.format(vyper.__version__))
+parser.add_argument('input_file', help='VyperFlow sourcecode to compile')
 parser.add_argument('-o', help='File to output', dest='output')
+parser.add_argument('--noif', help='compile with out information flow checking', action="store_true")
+parser.add_argument('--cons', help='output constraint file', action="store_true")
 
 args = parser.parse_args()
 
@@ -44,30 +44,18 @@ if __name__ == '__main__':
 
     with open(args.input_file) as fh:
         code = fh.read()
-        if args.show_gas_estimates:
-            parser_utils.LLLnode.repr_show_gas = True
-
-        if args.format == 'abi':
-            print(compiler.mk_full_signature(code))
-        elif args.format == 'json':
-            print(json.dumps(compiler.mk_full_signature(code)))
-        elif args.format == 'bytecode':
-            #vyperflow
-            result = compiler.if_compile(code)
-            if args.output is not None :
-                with open(args.output, "w") as output_file :
-                    output_file.write(result)
+        output = '0x' + compiler.compile(code).hex()
+        if not args.noif :
+            cons = compiler.if_compile(code)
+            if args.cons :
+                output = cons
             else :
-                with open("tmp.con", "w") as output_file :
-                    output_file.write(result)
                 if_log = subprocess.check_output([sherrloc, "tmp.con", "-c"]).decode()
-                print(if_log)
-                print('0x' + compiler.compile(code).hex())
-            #print('0x' + compiler.compile(code).hex())
-        elif args.format == 'bytecode_runtime':
-            print('0x' + compiler.compile(code, bytecode_runtime=True).hex())
-        elif args.format == 'ir':
-            print(optimizer.optimize(parse_to_lll(code)))
-        elif args.format == 'asm':
-            lll = optimizer.optimize(parse_to_lll(code))
-            print_asm(compile_lll.compile_to_assembly(lll))
+                if "No errors" not in if_log :
+                    output = if_log
+        if args.output is not None :
+            with open(args.output, "w") as output_file :
+                output_file.write(output)
+        else :
+            print(output)
+

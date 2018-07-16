@@ -50,6 +50,8 @@ if __name__ == '__main__':
             if args.cons :
                 output = cons
             else :
+                with open("tmp.con", "w") as cons_file :
+                    cons_file.write(cons)
                 if_log = subprocess.check_output([sherrloc, "tmp.con", "-c"]).decode()
                 if "No errors" not in if_log :
                     output = if_log

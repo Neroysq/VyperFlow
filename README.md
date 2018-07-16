@@ -13,7 +13,8 @@ Please checkout [`awesome-vyperflow`](https://github.com/FTRobbin/awesome-vyperf
 ## Getting Started
 
 ### Prerequisites
-[Python 3](https://www.python.org/getit/)
+[Python 3.6](https://www.python.org/getit/)
+**Caution: The current version of Vyper doesn't work with Python3.7 see (https://github.com/ethereum/vyper/issues/945)**
 
 [virtualenv](https://virtualenv.pypa.io/en/stable/installation/)
 

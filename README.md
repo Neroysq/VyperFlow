@@ -7,12 +7,13 @@ VyperFlow extends [Vyper](https://github.com/ethereum/vyper) with support for [i
 For [IC3 Bootcamp 18](http://www.initc3.org/events/2018-07-12-IC3-Ethereum-Crypto-Boot-Camp.html).
 
 ## VyperFlow is Awesome!
-Please checkout [awesome-vyperflow](https://github.com/FTRobbin/awesome-vyperflow-bootcamp) for motivating VyperFlow examples written by our working group members at IC3 Bootcamp!
+Please checkout [`awesome-vyperflow`](https://github.com/FTRobbin/awesome-vyperflow-bootcamp) for motivating VyperFlow examples written by our working group members at IC3 Bootcamp!
 
 ## Getting Started
 
 ### Prerequisites
 [Python 3](https://www.python.org/getit/)
+
 [Apache ant](https://ant.apache.org/manual/install.html)
 
 #### For Mac OS Users

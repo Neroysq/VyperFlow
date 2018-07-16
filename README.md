@@ -31,7 +31,7 @@ brew install gmp leveldb
 
 For `fatal error: openssl/aes.h: No such file or directory`, please reference [this](http://vyper.readthedocs.io/en/latest/installing-vyper.html#installation).
 
-### Install VyperFlow
+### Installing VyperFlow
 
 Get the latest version of VyperFlow by cloning this repository, and run the installation script.
 

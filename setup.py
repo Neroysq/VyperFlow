@@ -6,21 +6,15 @@ from setuptools import setup, find_packages
 with open('README.md') as f:
     readme = f.read()
 
-with open('LICENSE') as f:
-    license = f.read()
-
-
 setup(
-    name='vyper',
+    name='vyperflow',
     # *IMPORTANT*: Don't manually change the version here. Use the 'bumpversion' utility.
-    version='0.1.0-beta.1',
-    description='Vyper Programming Language for Ethereum',
+    version='0.1.0-alpha',
+    description='VyperFlow Programming Language for Ethereum',
     long_description=readme,
-    author='Vitalik Buterin',
+    author='Siqiu Yao, Haobin Ni',
     author_email='',
-    url='https://github.com/ethereum/vyper',
-    license=license,
-    packages=find_packages(exclude=('tests', 'docs')),
+    packages=find_packages(),
     python_requires='>=3.6',
     install_requires=['py-evm==0.2.0a18'],
     setup_requires=['pytest-runner'],

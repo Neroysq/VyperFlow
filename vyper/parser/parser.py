@@ -92,7 +92,32 @@ def parse(code):
     o = ast.parse(code)
     decorate_ast_with_source(o, code)
     o = resolve_negative_literals(o)
+    o = strip_off_ifl(o)
+    print("parse succ")
     return o.body
+
+class removeIFL(ast.NodeTransformer) :
+    def visit_Call(self, node) :
+        if node.func.id == "IFL" :
+            print(node)
+            print(node.args[0])
+            return node.args[0]
+        elif node.func.id == "endorse" :
+            return node.args[0]
+        else :
+            self.generic_visit(node)
+            return node
+
+    def visit_Name(self, node) :
+        if node.id[:4] == "IFL_" :
+            return None
+        else :
+            return node
+
+def strip_off_ifl(o) :
+    o = removeIFL().visit(o)
+    return o
+
 
 # source ~/vyper-venv/bin/activate
 # Minor pre-parser checks.
@@ -267,7 +292,10 @@ def get_item_name_and_attributes(item, attributes):
     if isinstance(item, ast.Name):
         return item.id, attributes
     elif isinstance(item, ast.AnnAssign):
-        return get_item_name_and_attributes(item.annotation, attributes)
+        print(item)
+        tmp = get_item_name_and_attributes(item.annotation, attributes)
+        print("succ")
+        return tmp
     elif isinstance(item, ast.Subscript):
         return get_item_name_and_attributes(item.value, attributes)
     # elif ist
@@ -398,24 +426,13 @@ def if_add_globals_and_events(_custom_units, _contracts, _defs, _events, _getter
 
 def add_globals_and_events(_custom_units, _contracts, _defs, _events, _getters, _globals, item):
     item_attributes = {"public": False}
+    print(item)
     if not (isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event"):
         item_name, item_attributes = get_item_name_and_attributes(item, item_attributes)
-        print('get item name and attr suc!') #IFL debug
         if not all([attr in valid_global_keywords for attr in item_attributes.keys()]):
             raise StructureException('Invalid global keyword used: %s' % item_attributes, item)
     if item.value is not None:
         raise StructureException('May not assign value whilst defining type', item)
-    #IFL begin
-    if isinstance(item.annotation, ast.Call) and item.annotation.func.id == 'IFL' :
-        print(item)
-        node = ast.AnnAssign()
-        node.annotation = item.annotation.args[0]
-        node.target = item.target
-        node.value = item.value
-        node.simple = item.simple
-        item = node
-        print(item, item_name)
-    #IFL end
     if isinstance(item.annotation, ast.Call) and item.annotation.func.id == "event":
         if _globals or len(_defs):
             raise StructureException("Events must all come before global declarations and function definitions", item)
@@ -489,7 +506,7 @@ def get_contracts_and_defs_and_globals(code):
     _defs = []
     _getters = []
     _custom_units = []
-
+    print("top level")
     for item in code:
         # Contract references
         if isinstance(item, ast.ClassDef):
@@ -1000,9 +1017,9 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
 
     print("globals done")
     #init setting
-    #l_sender = IF_utils.principal_trans("sender")
-    #if l_sender not in IFLs :
-    #    IFLs[l_sender] = {"pos" : None, "const" : True}
+    l_sender = IF_utils.principal_trans("sender")
+    if l_sender not in IFLs :
+        IFLs[l_sender] = {"pos" : None, "const" : True}
 
     init_vars = ["balance"]
     for var in init_vars :

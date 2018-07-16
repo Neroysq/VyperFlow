@@ -60,6 +60,8 @@ class FunctionSignature():
         # Determine the arguments, expects something of the form def foo(arg1: int128, arg2: int128 ...
         args = []
         for arg in code.args.args:
+            if isinstance(arg.annotation, ast.Call) and arg.annotation.func.id == "IFL" :
+                arg.annotation = arg.annotation.args[0]
             typ = arg.annotation
             if not typ:
                 raise InvalidTypeException("Argument must have type", arg)

@@ -9,6 +9,7 @@ from vyper.parser.parser import parse_to_lll
 from vyper.parser import parser_utils
 from vyper import compile_lll
 
+sherrloc = "/home/animula/GitRep/sherrloc/GenErrorDiagnostic/sherrloc"
 sys.tracebacklimit = 0
 
 parser = argparse.ArgumentParser(description='Vyper {0} programming language for Ethereum'.format(vyper.__version__))
@@ -38,6 +39,7 @@ def print_asm(asm_list):
             print('')
 
 
+import subprocess
 if __name__ == '__main__':
 
     with open(args.input_file) as fh:
@@ -56,7 +58,11 @@ if __name__ == '__main__':
                 with open(args.output, "w") as output_file :
                     output_file.write(result)
             else :
-                print(result)
+                with open("tmp.con", "w") as output_file :
+                    output_file.write(result)
+                if_log = subprocess.check_output([sherrloc, "tmp.con", "-c"]).decode()
+                print(if_log)
+                print('0x' + compiler.compile(code).hex())
             #print('0x' + compiler.compile(code).hex())
         elif args.format == 'bytecode_runtime':
             print('0x' + compiler.compile(code, bytecode_runtime=True).hex())

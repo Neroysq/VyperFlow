@@ -8,11 +8,11 @@ def __init__(_owner : address):
 # This requires endorsement of the value in order to send money.
 @public
 @IFL_this
-def withdraw(val : IFL(unit, owner), addr : IFL(address, owner)):
+def withdraw(val : IFL(wei_value, owner), addr : IFL(address, owner)):
     if endorse(val <= self.balance, bot, this):
         send(endorse(addr, owner, this), endorse(val, owner, this))
 
-@pubic
+@public
 @payable
 def deposit():
     # DO NOTHING (anyone can deposit money, we don't mind)

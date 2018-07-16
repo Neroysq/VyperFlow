@@ -196,7 +196,7 @@ public class ShortestPathFinder extends CFLPathFinder {
 	
 	@Override
 	protected void inferEdge(Node start, Node end, EdgeCondition inferredType, int size, List<Evidence> evidence, boolean isAtomic) {	
-		if (inferredType instanceof LeqCondition)
+		if (inferredType instanceof LeqCondition && DEBUG)
 			System.out.println("Adding edge "+start.getElement()+"->"+end.getElement());
 		addNextHop(start, end, inferredType, evidence);
 		

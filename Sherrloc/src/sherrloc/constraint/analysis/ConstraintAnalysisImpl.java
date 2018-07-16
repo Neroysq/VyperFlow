@@ -163,7 +163,8 @@ public class ConstraintAnalysisImpl implements ConstraintAnalysis {
 				// test if a partial ordering can be inferred
 				if (!(start.getElement() instanceof JoinElement) && !(end.getElement() instanceof MeetElement) && finder.hasLeqEdge(start, end)) {
 					List<Edge> l = finder.getPath(start, end);
-					System.out.println("Comparing "+ start.getElement()+"-->"+end.getElement());
+                    if (DEBUG)
+					  System.out.println("Comparing "+ start.getElement()+"-->"+end.getElement());
 					if (skolemCheck(start.getElement(), end.getElement()))
 						testConsistency(start.getElement(), end.getElement(), l, graph, finder, unsatPaths, false);
 					else {

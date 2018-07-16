@@ -1,6 +1,7 @@
-# VyperFlow
+![VyperFlow](logo/VyperFlow.png)
+
 ---
-A next-generation secure smart contract language for Ethereum.
+VyperFlow is a next-generation secure smart contract language for Ethereum.
 
 VyperFlow extends [Vyper](https://github.com/ethereum/vyper) with support for [information flow](https://www.cs.cornell.edu/jif/).
 

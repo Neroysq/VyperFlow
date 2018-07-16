@@ -115,7 +115,6 @@ public class TestAll {
 		testAssumptions("tests/jif/axiom5.con", "- list (Bool) <= Eq;\n");
 		testErrorPaths("tests/jif/axiom6.con", false);
 		testErrorPaths("tests/jif/axiom7.con", false);
-		testErrorPaths("tests/jif/axiom8.con", true);
 		testAssumptions("tests/jif/associativity.con", "- (list (x))->(list (x)) <= list (CHAR);list (CHAR) <= (list (x))->(list (x));\n" );
 		testAssumptions("tests/jif/extraEdges.con", "- b <= a;\n");
 		testErrorPaths("tests/jif/infiType1.con", true);

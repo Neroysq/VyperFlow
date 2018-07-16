@@ -37,7 +37,7 @@ public class ConstraintAnalysisImpl implements ConstraintAnalysis {
 	private boolean isRec;
 	private boolean isGenHypo;
 	private boolean DEBUG = false;
-	private boolean PASSIVE = false;
+	private boolean PASSIVE = true;
 	private int expansion_time = 0;
 	
 	private Map<Element, Set<Element>> testedL = new HashMap<Element, Set<Element>>();
@@ -72,6 +72,7 @@ public class ConstraintAnalysisImpl implements ConstraintAnalysis {
 	@Override
 	public UnsatPaths genErrorPaths(ConstraintGraph graph) {
 		UnsatPaths unsatPaths = new UnsatPaths();
+		Set<Node> allNodes = new HashSet<Node>(graph.getAllNodes());
 		
 		if (isVerbose)
 			System.out.println("graph_size: " + graph.getAllNodes().size());
@@ -148,7 +149,6 @@ public class ConstraintAnalysisImpl implements ConstraintAnalysis {
 			}
 		}
 		
-		Set<Node> allNodes = new HashSet<Node>(graph.getAllNodes());
 		for (Node start : allNodes) {
 			for (Node end : allNodes) {
 				// avoid returning duplicated edges when only equalities are used
@@ -163,8 +163,6 @@ public class ConstraintAnalysisImpl implements ConstraintAnalysis {
 				// test if a partial ordering can be inferred
 				if (!(start.getElement() instanceof JoinElement) && !(end.getElement() instanceof MeetElement) && finder.hasLeqEdge(start, end)) {
 					List<Edge> l = finder.getPath(start, end);
-                    if (DEBUG)
-					  System.out.println("Comparing "+ start.getElement()+"-->"+end.getElement());
 					if (skolemCheck(start.getElement(), end.getElement()))
 						testConsistency(start.getElement(), end.getElement(), l, graph, finder, unsatPaths, false);
 					else {

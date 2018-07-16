@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -54,9 +53,6 @@ public class ShortestPathFinder extends CFLPathFinder {
 	private Map<Node, List<Node>>   meetElements = new HashMap<Node, List<Node>>();
 	private Map<Node, List<Node>>   consElements = new HashMap<Node, List<Node>>();
 	
-	/** for each node, we track a trace of solid edges (edges where both end nodes are black) to avoid recursion */
-	private Map<Node, Set<Edge>>	trace = new HashMap<Node, Set<Edge>>();
-	
 	/** other fields */
 	private int MAX = 100000;
 	private PriorityQueue<ReductionEdge> queue;
@@ -76,7 +72,7 @@ public class ShortestPathFinder extends CFLPathFinder {
 		super(graph);
 		/** initialize data structures */
 		standardForm = USE_SF && !isHypo;
-		actively_expanding = ACTIVE; // && isHypo;
+		actively_expanding = ACTIVE && isHypo;
 		queue = new PriorityQueue<ReductionEdge>(
 				500, new Comparator<ReductionEdge>() {
 					public int compare(ReductionEdge o1, ReductionEdge o2) {
@@ -138,12 +134,6 @@ public class ShortestPathFinder extends CFLPathFinder {
 		}
 	}
 	
-	/**
-	 * Add n as the super-element of all its sub-elements.
-	 * 
-	 * @param app An application element
-	 * @param n The node for parameter app
-	 */
 	private void initConsElements (Application app, Node n) {
 		for (Element ele : app.getElements()) {
 			if (ele instanceof Application) {
@@ -153,8 +143,7 @@ public class ShortestPathFinder extends CFLPathFinder {
 				Node toadd = g.getNode(ele);
 				if (!consElements.containsKey(toadd))
 					consElements.put(toadd, new ArrayList<Node>());
-				if (!consElements.get(toadd).contains(n))
-					consElements.get(toadd).add(n);
+				consElements.get(toadd).add(n);
 			}
 		}
 	}
@@ -196,8 +185,6 @@ public class ShortestPathFinder extends CFLPathFinder {
 	
 	@Override
 	protected void inferEdge(Node start, Node end, EdgeCondition inferredType, int size, List<Evidence> evidence, boolean isAtomic) {	
-		if (inferredType instanceof LeqCondition && DEBUG)
-			System.out.println("Adding edge "+start.getElement()+"->"+end.getElement());
 		addNextHop(start, end, inferredType, evidence);
 		
 		if (inferredType instanceof LeqCondition) {
@@ -548,33 +535,24 @@ public class ShortestPathFinder extends CFLPathFinder {
 	 * @param n
 	 * @param subst
 	 */
-	private void expandOneNode (Node n, Node subst, LeqEdge edge, boolean ltor) {
+	private void expandOneNode (Node n, Node subst, boolean ltor) {
+		int size = getShortestLeq(n, subst);
+		List<Evidence> evi = new ArrayList<Evidence>();
+		Evidence e = new Evidence(n, subst, LeqCondition.getInstance());
+		evi.add(e);
+		
 		if (consElements.containsKey(n) && !n.isGray() && !subst.isGray()) {
-			List<Node> copy = new ArrayList<Node>(consElements.get(n)); 
-			for (Node cplxNode : copy) {
-				if (!cplxNode.isGray() || !trace.get(cplxNode).contains(edge)) {
+			for (Node cplxNode : consElements.get(n)) {
+				if (!cplxNode.isGray()) {
 					Application app = (Application) cplxNode.getElement();
 					List<Application> nelems = app.replace(n.getElement(), subst.getElement());
-//					boolean direction = (ltor&&(app.getVariance()==Variance.POS)) || (!ltor&&(app.getVariance()==Variance.NEG));
+					boolean direction = (ltor&&(app.getVariance()==Variance.POS)) || (!ltor&&(app.getVariance()==Variance.NEG));
 					for (Application nelem : nelems) {
-						if (g.hasElement(nelem))
-							continue;
 						Node newnode =  g.getNode(nelem, true);
-						trace.put(newnode, new HashSet<Edge>());
-						if (cplxNode.isGray())
-							trace.get(newnode).addAll(trace.get(cplxNode));
-						trace.get(newnode).add(edge);
-						initConsElements(nelem, newnode);
-//						int size = getShortestLeq(n, subst);
-//						List<Evidence> evi = new ArrayList<Evidence>();
-//						Evidence e = new Evidence(n, subst, LeqCondition.getInstance());
-//						evi.add(e);
-//						System.out.println("trying "+cplxNode+" to "+newnode+" based on "+n+" to "+subst);
-//						
-//						if (direction && !hasLeftEdge(cplxNode, newnode))
-//							inferEdge(cplxNode, newnode, LeqCondition.getInstance(), size, evi, true);
-//						else
-//							inferEdge(newnode, cplxNode, LeqCondition.getInstance(), size, evi, true);
+						if (direction && !hasLeftEdge(cplxNode, newnode))
+							inferEdge(cplxNode, newnode, LeqCondition.getInstance(), size, evi, true);
+						else
+							inferEdge(newnode, cplxNode, LeqCondition.getInstance(), size, evi, true);
 					}
 				}
 			}
@@ -665,8 +643,8 @@ public class ShortestPathFinder extends CFLPathFinder {
 		// if node "from" and "to" belong to same constructor, check if this new
 		// link enables a leq relation on the constructor application
 		if (actively_expanding && (consElements.containsKey(from) || consElements.containsKey(to))) {
-			expandOneNode(from, to, edge, true);
-			expandOneNode(to, from, edge, false);
+			expandOneNode(from, to, true);
+			expandOneNode(to, from, false);
 
 			if (consElements.containsKey(from) && consElements.containsKey(to)) {
 			for (Node cnFrom : consElements.get(from)) {

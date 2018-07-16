@@ -14,7 +14,8 @@ Please checkout [`awesome-vyperflow`](https://github.com/FTRobbin/awesome-vyperf
 
 ### Prerequisites
 [Python 3.6](https://www.python.org/getit/)
-**Caution: The current version of Vyper doesn't work with Python3.7 see (https://github.com/ethereum/vyper/issues/945)**
+
+**Caution: The current version of Vyper is compatible with Python3.7 see this** [**issue**](https://github.com/ethereum/vyper/issues/945)
 
 [virtualenv](https://virtualenv.pypa.io/en/stable/installation/)
 

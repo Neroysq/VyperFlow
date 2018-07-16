@@ -1,0 +1,398 @@
+/** 
+ * CUP specification for a constraint language as described in paper 
+ * "Toward General Diagnosis of Static Errors" 
+ * by Danfeng Zhang and Andrew C. Myers
+ */
+
+package sherrloc.constraint.parse;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import sherrloc.constraint.ast.Axiom;
+import sherrloc.constraint.ast.Bottom;
+import sherrloc.constraint.ast.Constraint;
+import sherrloc.constraint.ast.Function;
+import sherrloc.constraint.ast.Inequality;
+import sherrloc.constraint.ast.Constructor;
+import sherrloc.constraint.ast.ConstructorApplication;
+import sherrloc.constraint.ast.FunctionApplication;
+import sherrloc.constraint.ast.VariableApplication;
+import sherrloc.constraint.ast.Element;
+import sherrloc.constraint.ast.Hypothesis;
+import sherrloc.constraint.ast.JoinElement;
+import sherrloc.constraint.ast.MeetElement;
+import sherrloc.constraint.ast.Relation;
+import sherrloc.constraint.ast.Top;
+import sherrloc.constraint.ast.Variable;
+import sherrloc.constraint.ast.QuantifiedVariable;
+import sherrloc.constraint.ast.Position;
+import sherrloc.diagnostic.DiagnosisInput;
+import sherrloc.graph.Variance;
+
+action code {: 
+				Map<String, Constructor> constructors = new HashMap<String, Constructor>( );
+				Map<String, Function> functions = new HashMap<String, Function>( );
+				List<Axiom> axioms = new ArrayList<Axiom>( );
+				Map<String, Variable> variables = new HashMap<String, Variable>(); 
+				Map<String, QuantifiedVariable> qvars = new HashMap<String, QuantifiedVariable>();
+				Hypothesis env = new Hypothesis();
+				boolean varMode = false; // there are two modes of declaring constraint variables and constructors: varMode=true, when variables are 
+				                         // declared and constructors are inferred; varMode = false, when constructors (and arities) are declared
+			:};
+						
+/* Terminals (tokens returned by the scanner). */
+terminal 			SEPERATION;
+terminal            CONSTRUCTOR, FUNCTION, VARIABLE;
+terminal            EQ, LEQ, GEQ;
+terminal            ARROW, LARROW, JOIN, MEET;
+terminal            SEMICOLON, LPAREN, RPAREN, LBRACK, RBRACK, COMMA, DOT, DASH, COLON, AT, LBRACE, RBRACE;
+terminal Integer    INTEGER_LITERAL;
+terminal String     IDENTIFIER, STRING_LITERAL;
+terminal            AXIOM, IMPLIES, LEVEL;
+
+/* Non terminals */
+non terminal DiagnosisInput     cons_spec;
+non terminal Constraint         equation;
+non terminal Set<Constraint>	equations;
+non terminal Inequality         inequality;
+non terminal Set<Inequality>    inequalities;
+non terminal List<QuantifiedVariable> var_list;
+non terminal Hypothesis 		env;
+non terminal 					declaration, declarations, one_declaration, constructor, function, variable;
+non terminal				    assumptions, assumption;
+non terminal Element			term, element, ele_pos;
+non terminal String           	id;
+non terminal Integer			arity, level;
+non terminal List<Element>		ele_pos_list, join_list, meet_list;
+non terminal Position           range, position;
+
+/* Precedences */
+precedence right ARROW, LARROW, MEET, JOIN;
+precedence left COMMA;
+
+/* The grammar */
+cons_spec 	::= declaration 	
+			{: 
+					constructors.put("arrow", new Constructor("arrow", 2, 0, Variance.POS, Position.EmptyPosition()));
+					constructors.put("larrow", new Constructor("larrow", 2, 0, Variance.NEG, Position.EmptyPosition()));
+					constructors.put("pair",  new Constructor("pair", 2, 0, Variance.POS, Position.EmptyPosition()));
+					constructors.put("_",  new Bottom(Position.EmptyPosition())); 
+					constructors.put("*",  new Top(Position.EmptyPosition())); 
+			:} 
+				SEPERATION assumptions SEPERATION equations:l
+			{: 
+			    env.addAxioms(axioms);
+			    RESULT = new DiagnosisInput (env, l, axioms); :}			
+			| 	declaration 
+			{: 
+					constructors.put("arrow", new Constructor("arrow", 2, 0, Variance.POS, Position.EmptyPosition()));
+					constructors.put("larrow", new Constructor("larrow", 2, 0, Variance.NEG, Position.EmptyPosition()));
+					constructors.put("pair",  new Constructor("pair", 2, 0, Variance.POS, Position.EmptyPosition())); 
+					constructors.put("_",  new Bottom(Position.EmptyPosition())); 
+					constructors.put("*",  new Top(Position.EmptyPosition())); 
+			:} 
+				equations:l
+			{: 
+			    env.addAxioms(axioms);
+			    RESULT = new DiagnosisInput (env, l, axioms); :}
+			;
+
+declaration  ::= declarations
+            | {: 
+               varMode = true; // use var mode when there is no declaration
+               :}
+            ;
+            
+declarations ::= declarations one_declaration
+            | one_declaration
+            ;
+
+one_declaration ::= constructor
+            | function
+            | variable
+            ;
+            			
+constructor  ::= CONSTRUCTOR id:s arity:a
+			{: constructors.put( s, new Constructor(s, a, 0, Variance.POS, Position.EmptyPosition())); :}
+			| CONSTRUCTOR id:s arity:a LEVEL level:l
+			{: constructors.put( s, new Constructor(s, a, l, Variance.POS, Position.EmptyPosition())); :}
+			;
+			
+function    ::= FUNCTION id:s arity:a
+			{: functions.put( s, new Function(s, a, Position.EmptyPosition())); :}
+			;
+			            
+variable  ::= VARIABLE id:s
+            {: variables.put( s, new Variable(s, 0)); 
+               varMode = true;
+            :}
+            | VARIABLE id:s LEVEL level:l
+            {: variables.put( s, new Variable(s, l)); 
+               varMode = true;
+            :}
+            ;
+
+id        	::= IDENTIFIER:s
+			{: RESULT = s; :} 
+			;
+			
+arity		::= INTEGER_LITERAL:a
+			{: RESULT = a; :};
+			
+level        ::= INTEGER_LITERAL:l
+            {: RESULT = l; :};
+			
+assumptions ::= assumptions assumption
+            | assumption
+            ;
+            
+assumption  ::= AXIOM var_list:lst DOT inequalities:ie1 IMPLIES inequalities:ie2 SEMICOLON
+            {: axioms.add(new Axiom(lst, ie1, ie2)); qvars.clear(); :}
+            |   AXIOM inequalities:ie1 IMPLIES inequalities:ie2 SEMICOLON
+            {: axioms.add(new Axiom(new ArrayList<QuantifiedVariable>(), ie1, ie2)); qvars.clear(); :}
+            |   AXIOM var_list:lst DOT inequalities:ie SEMICOLON
+            {: axioms.add(new Axiom(lst, new HashSet<Inequality>(), ie)); qvars.clear(); :}
+            |   inequality:ie SEMICOLON
+            {: env.addInequality(ie); :}
+            ;
+            
+var_list    ::= var_list:lst COMMA IDENTIFIER:s
+            {: QuantifiedVariable qv = new QuantifiedVariable(s);
+               lst.add(qv);
+               qvars.put(s, qv); 
+               RESULT = lst; :}
+            | IDENTIFIER:s
+            {: List<QuantifiedVariable> lst = new ArrayList<QuantifiedVariable>(); 
+               QuantifiedVariable qv = new QuantifiedVariable(s);
+               lst.add(qv); 
+               qvars.put(s, qv);
+               RESULT = lst; :}
+            ;
+
+inequalities ::= inequalities:s inequality:ie SEMICOLON
+            {: s.add(ie); RESULT = s; :}
+            | inequality:ie SEMICOLON
+            {: Set<Inequality> set = new HashSet<Inequality>(); set.add(ie); RESULT = set; :}
+            ;
+                      
+inequality  ::= ele_pos:e1 EQ ele_pos:e2
+            {: RESULT = new Inequality (e1, e2, Relation.EQ); :}  
+            | ele_pos:e1 LEQ ele_pos:e2
+            {: RESULT = new Inequality (e1, e2, Relation.LEQ); :}
+            | ele_pos:e1 GEQ  ele_pos:e2
+            {: RESULT = new Inequality (e2, e1, Relation.LEQ); :}
+            ;
+            
+equations   ::= equations:s equation:e 
+            {: s.add(e); RESULT = s; :}
+            | 
+            equation:e
+            {: Set<Constraint> set = new HashSet<Constraint>(); set.add(e); RESULT = set; :}
+            ;
+            
+equation 	::= inequality:ie env:e SEMICOLON position:p
+			{: RESULT = new Constraint (ie, e, p); :}  
+            ;
+            
+env         ::= LBRACE inequalities:l RBRACE
+			{: Hypothesis e = new Hypothesis(); 
+			   for (Inequality ie : l)
+			       e.addInequality(ie);
+			   RESULT = e; 
+			:}
+			| LBRACE RBRACE
+			{:
+			   RESULT = null;
+			:}
+			|
+			{:
+			   RESULT = null;
+			:}
+			;
+						
+position	::= LBRACK STRING_LITERAL:snippet COLON range:p AT IDENTIFIER:s RBRACK
+			{: 
+			   p.setFile(s);
+			   p.setSnippet(snippet); 
+			   RESULT = p; 
+			:}
+			| LBRACK STRING_LITERAL:snippet COLON range:p RBRACK
+			{: 
+			   p.setSnippet(snippet); 
+			   RESULT = p; 
+			:}
+			| LBRACK range:p AT IDENTIFIER:s RBRACK
+			{: 
+			   p.setFile(s);
+			   RESULT = p; 
+			:}
+			| LBRACK range:p RBRACK
+			{: 
+			   RESULT = p; 
+			:}
+			|
+			{:
+			   RESULT = Position.EmptyPosition();
+			:}
+			;
+			
+range		::= INTEGER_LITERAL:d1 COMMA INTEGER_LITERAL:d2 DASH INTEGER_LITERAL:d3
+			{:
+			    RESULT = new Position ("", "", d1, d2, d1, d3);
+			:}
+			|   INTEGER_LITERAL:d1 COMMA INTEGER_LITERAL:d2 DASH INTEGER_LITERAL:d3 COMMA INTEGER_LITERAL:d4
+			{:
+			    RESULT = new Position ("", "", d1, d2, d3, d4);
+			:}
+			|   IDENTIFIER:s /* identifiers are currently ignored */
+			{:  RESULT = Position.EmptyPosition(); :}
+			| /* no position */
+			{:  RESULT = Position.EmptyPosition(); :}
+			;
+            
+term     	::=  term:t1 ARROW term:t2
+			{: 	List<Element> l = new ArrayList<Element>();
+				l.add(t1);
+				l.add(t2);  
+				RESULT = new ConstructorApplication (constructors.get("arrow"), l);
+			:}
+			|
+				term:t1 LARROW term:t2
+			{: 	List<Element> l = new ArrayList<Element>();
+				l.add(t1);
+				l.add(t2);  
+				RESULT = new ConstructorApplication (constructors.get("larrow"), l);
+			:}
+			| term:t1 COMMA term:t2
+			{: 	
+				List<Element> l = new ArrayList<Element>();
+				l.add(t1);
+				l.add(t2);  
+				RESULT = new ConstructorApplication (constructors.get("pair"), l); 
+			:}
+			| term:t1 JOIN join_list:l
+			{: 	
+				l.add(0,t1);
+				JoinElement e = new JoinElement (l);
+				RESULT =  e;
+			:}
+			| term:t1 MEET meet_list:l
+			{: 	
+				l.add(0,t1);
+				MeetElement e = new MeetElement (l);
+				RESULT = e; 
+			:}
+			| ele_pos_list:l
+			{: 	
+			    Element e = l.remove(0);
+			    if (l.size()==0) {
+			        RESULT = e;
+			    }
+			    else {
+			        if (!(e instanceof Constructor) && !(e instanceof Variable) && !(e instanceof Function))
+			            throw new Error("\""+e+"\"" + " is not a constructor, function, or variable");
+			        if (e instanceof Constructor) {
+			            Constructor c = (Constructor) e;
+			            if (varMode && constructors.get(c.getName()).getArity() == 0) {   // need to infer the arity of constructors
+			                c.setArity(l.size());
+			                constructors.get(c.getName()).setArity(l.size());
+			            }
+				        /*if (c.getArity() > l.size()) 
+				            System.out.println ("Constraints contain partial application: constructor "+c+" takes wrong number of parameters: "+
+			   						"expecting "+c.getArity()+" getting "+l.size());
+			   			else*/ if (c.getArity() < l.size())
+			   			    c.setArity(l.size());
+			            RESULT = new ConstructorApplication (c, l);
+			        }
+			        else if (e instanceof Function) {
+			            Function f = (Function) e;
+				        if (f.getArity() > l.size()) 
+				            System.err.println ("Functions contain partial application: function "+f+" takes wrong number of parameters: "+
+			   						"expecting "+f.getArity()+" getting "+l.size());
+			   			RESULT = new FunctionApplication (f, l);
+			        }
+			        else {
+			            RESULT = new VariableApplication ((Variable)e, l);
+			        }
+			    } 
+			:}
+			;
+		
+join_list    ::= join_list:l JOIN term:e
+			{:
+			    l.add(e);
+			    RESULT = l;
+			:}
+			| term:e
+			{: 
+			    List<Element> l = new ArrayList<Element>(); 
+			    l.add(e); 
+			    RESULT = l; 
+			:}
+			;
+			
+meet_list   ::= meet_list:l MEET term:e
+			{:
+			    l.add(e);
+			    RESULT = l;
+			:}
+			| term:e
+			{: 
+			    List<Element> l = new ArrayList<Element>(); 
+			    l.add(e); 
+			    RESULT = l; 
+			:}
+			;
+
+ele_pos_list ::= ele_pos_list:l ele_pos:e
+			{: 
+			    l.add(e); 
+			    RESULT = l; 
+			:}
+			| ele_pos:e
+			{: 
+			    List<Element> l = new ArrayList<Element>(); 
+			    l.add(e); 
+			    RESULT = l; 
+			:}
+			;
+			
+ele_pos ::= element:e1 position:p 
+			{:
+				e1.setPosition(p);
+				RESULT = e1;
+			:}
+			;
+
+/* a single element is either a variable or a constructor with 0 arity */
+element		::= IDENTIFIER:s
+			{: 	
+			    Element e;
+			    if (qvars.containsKey(s)) {
+			        e = qvars.get(s);
+			    }
+				else if (constructors.containsKey(s)) {
+					e = constructors.get(s).clone();
+				}
+				else if (functions.containsKey(s)) {
+					e = functions.get(s).clone();
+				}
+				else if (varMode && !(variables.containsKey(s))) {
+				    e = new Constructor(s, 0, 0, Variance.POS, Position.EmptyPosition());
+				    constructors.put(s, (Constructor)e);
+				}
+				else {
+			   		if (!(variables.containsKey(s)))
+			   			variables.put (s, new Variable(s,0));
+			   		e = variables.get(s);
+			   	}		
+			   	RESULT = e;
+			 :}
+			 | LPAREN term:t RPAREN 
+			 {:  RESULT = t; :}
+			 ;

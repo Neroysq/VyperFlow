@@ -22,7 +22,7 @@ def eval_label(exp, IFLs) :
         ppls = exp.strip().split("_")
     else :
         raise StructureException("label must be type ast.Name: %s")
-    rnt = {"meet" : False, "principals":[]}
+    rnt = {"meet" : True, "principals":[]}
     for ppl in ppls :
         pname = principal_trans(ppl)
         if pname not in ppls :

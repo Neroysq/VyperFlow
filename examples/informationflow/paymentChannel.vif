@@ -1,0 +1,25 @@
+# These use recursively-defined dependent types, which we would like to support.
+payer : IFL(address, payer)
+receiver : IFL(address, receiver)
+
+@public
+def __init__(_payer : address, _receiver : address):
+    self.payer = _payer
+    self.receiver = _receiver
+
+@public
+@IFL_this
+# This uses "+" to be the conjunction of two labels
+def close(val : IFL(unit, payer_receiver)):
+    send(endorse(self.receiver, receiver, this), endorse(val, payer_receiver, this))
+    selfdestruct(endorse(self.payer, payer, this))
+
+@public
+@IFL_payer
+def transferOwnership(newSender : IFL(address, payer)):
+    self.payer = newSender
+
+@public
+@IFL_receiver
+def transferReceiver(newReceiver : IFL(address, receiver)):
+    self.receiver = newReceiver

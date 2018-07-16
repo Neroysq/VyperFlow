@@ -675,7 +675,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         pos = getpos(node)
         l_result = pc + ".cst." + IF_utils.pos_str(pos)
         IFLs[l_result] = {"pos" : pos, "const" : False}
-        _cons.append(IF_utils.new_cons(l_result, pc, pos))
+        #_cons.append(IF_utils.new_cons(l_result, pc, pos))
         return l_result, _cons, IFLs
 
     if isinstance(node, ast.List) or isinstance(node, ast.Tuple) :
@@ -706,7 +706,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
             l_result = _func_augs[_def.name][1][node.id]
         else :
             l_result = IFLs[node.id]
-        _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+        #_cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
         print("name node end")
         return l_result, _cons, IFLs
 
@@ -758,8 +758,9 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
             IFLs[l_result] = {"pos" : pos, "const" : False}
 
             _cons.append(IF_utils.new_cons(l_from, l_orig, getpos(node.args[1])))
-            _cons.append(IF_utils.new_cons(l_to, l_result, getpos(node.args[2])))
-            _cons.append(IF_utils.new_cons(l_orig, l_result, pos))
+            #_cons.append(IF_utils.new_cons(l_to, l_result, getpos(node.args[2])))
+            _cons.append(IF_utils.new_cons(l_result, l_to, pos))
+            #_cons.append(IF_utils.new_cons(l_orig, l_result, pos))
         else :
             #TODO: build-in func analysis
             funcname = node.func.id
@@ -924,8 +925,7 @@ def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
         if isinstance(node.annotation, ast.Call) and node.annotation.func.id == "IFL":
             IFLs[l_var] = {"pos" : pos, "const" : True} #TODO: const?
             if_label, IFLs = IF_utils.eval_label(node.annotation.args[1], IFLs)
-            if_target_label = node.target.id
-            _cons.append(IF_utils.new_cons(if_label, if_target_label, pos))
+            _cons.append(IF_utils.new_cons(if_label, l_var, pos))
         else :
             IFLs[l_var] = {"pos" : pos, "const" : False}
         _cons.append(IF_utils.new_cons(l_var, pc, pos))
@@ -1021,8 +1021,12 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
             {
                 "name" : "send",
                 "arg_n" : 2
-                }
-            ]
+            },
+            {
+                "name" : "selfdestruct",
+                "arg_n" : 1
+            }
+        ]
     for f in critical_build_in_func :
         fname = f["name"]
         l_begin = fname + "..begin"

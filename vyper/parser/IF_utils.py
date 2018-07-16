@@ -39,6 +39,10 @@ def principal_trans(s) :
 
 def to_sherrlocname(s) :
     if s[0] == "@" :
+        if s[1:] == "bot" :
+            return "_"
+        elif s[1:] == "top" :
+            return "*"
         return "P_" + s[1:]
     else :
         return s

@@ -5,7 +5,6 @@ from . import optimizer
 
 def if_compile(code) :
     output = parser.if_parse_tree_to_lll(parser.if_parse(code), code)
-    print("succ.")
     return output
 
 def compile(code, *args, **kwargs):

@@ -10,7 +10,7 @@ def __init__(_owner : address):
 @IFL_this
 def withdraw(val : IFL(wei_value, owner), addr : IFL(address, owner)):
     if endorse(val <= self.balance, bot, this):
-        send(addr, endorse(val, owner, this))
+        send(addr, endorse(val, owner, this)) # Oh no, addr cannot flow into send
 
 @public
 @payable

@@ -10,7 +10,7 @@ def __init__(_owner : address):
 @IFL_this
 def withdraw(val : IFL(unit, owner), addr : IFL(address, owner)):
     if endorse(val <= self.balance, owner, this):
-        send(addr, endorse(val, owner, this))
+        send(endorse(addr, owner, this), endorse(val, owner, this))
 
 @pubic
 @payable

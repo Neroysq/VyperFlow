@@ -15,6 +15,8 @@ Please checkout [`awesome-vyperflow`](https://github.com/FTRobbin/awesome-vyperf
 ### Prerequisites
 [Python 3](https://www.python.org/getit/)
 
+[virtualenv](https://virtualenv.pypa.io/en/stable/installation/)
+
 [Apache ant](https://ant.apache.org/manual/install.html)
 
 #### For Mac OS Users

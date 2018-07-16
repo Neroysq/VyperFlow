@@ -1,7 +1,8 @@
 #!/bin/bash
 
 cd "$(brew --repo homebrew/core)"
+git branch -d python-3.6.5_1
 git checkout -b python-3.6.5_1 f2a764ef944b1080be64bd88dca9a1d80130c558
 brew unlink python
-brew install python
+HOMEBREW_NO_AUTO_UPDATE=1 brew install python
 git checkout master

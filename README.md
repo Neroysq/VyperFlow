@@ -56,4 +56,4 @@ vyper examples/wallet.vif
 If everything works correctly, you should see the compiled bytecode as output.
 
 ---
-[Siqiu Yao](https://github.com/Neroysq), [Haobin Ni](https://github.com/FTRobbin/Ironwood), Cornell University, 2018
+[Siqiu Yao](https://github.com/Neroysq), [Haobin Ni](https://github.com/FTRobbin), Cornell University, 2018

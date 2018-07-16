@@ -25,8 +25,6 @@ setup(
        'py-evm==0.2.0a18',
     ],
     scripts=[
-       'bin/vyper',
-       'bin/vyper-serve',
-       'bin/vyper-run',
+       'bin/vif',
     ]
 )

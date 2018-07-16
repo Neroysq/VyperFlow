@@ -56,7 +56,7 @@ source vif-venv/bin/activate
 You can compile an example contract by running:
 
 ```sh
-vyper examples/wallet.vif
+vif examples/wallet.vif
 ```
 
 If everything works correctly, you should see the compiled bytecode as output.

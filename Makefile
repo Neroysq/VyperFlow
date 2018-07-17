@@ -19,4 +19,4 @@ clean-pyc:
 	find . -name '__pycache__' -exec rmdir {} +
 
 sherrloc-build:
-	cd sherrloc; ant
+	cd Sherrloc; ant

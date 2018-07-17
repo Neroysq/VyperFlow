@@ -805,7 +805,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
 
                 l_arg = _func_augs[funcname][0][index]
                 l_value, _cons, IFLs = if_parse_expr(arg, _func_augs, _cons, IFLs, _def, pc)
-                _cons.append(IF_utils.new_cons(l_arg, l_value, pos))
+                _cons.append(IF_utils.new_cons(l_arg, l_value, getpos(arg)))
 
         return l_result, _cons, IFLs
 

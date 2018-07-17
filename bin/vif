@@ -38,13 +38,63 @@ def print_asm(asm_list):
         else:
             print('')
 
+class cmdfmt:
+    SUCC = '\033[42m' + '\033[97m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[103m'
+    FAIL = '\033[41m' + '\033[97m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    BRIGHT = '\033[97m'
+    YELLOW = '\033[33m'
+
+
+    def test() :
+        print(''.join(['\033[' + str(x) + 'm' +str(x)+'\033[0m' for x in range(0,150)])) 
+
+def fmt(s, conf) :
+    return ''.join(conf) + s + cmdfmt.ENDC
+
+def pos_printer(line) :
+    tmp = line.split('[')[1].split(']')[0]
+    lineno = tmp.split(',')[0]
+    colno = tmp.split(',')[1].split('-')[0]
+    return 'Line no.' + fmt(lineno, [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'Column no.' + fmt(colno, [cmdfmt.YELLOW, cmdfmt.BOLD])
+
+def if_log_pretty_printer(log) :
+    #if '⊓' in log or '⊔' in log :
+    #    return log
+    lines = log.strip().split('\n')
+    nxt = {}
+    for line in lines :
+        if '-' in line :
+            left, right = line[2:].split(',')[0].split('<=')
+            if left[:2] == 'P_' :
+                end = right
+            elif right[:2] == 'P_' :
+                start = left
+            else :
+                nxt[right] = {"name" : left, "pos" : pos_printer(line)}
+    output = 'Possible information flow violation(s):'
+    while True :
+        if start not in nxt :
+            break
+        output += '\n' + nxt[start]["pos"]
+        if start == end :
+            break
+        start = nxt[start]["name"]
+    return output
+
 
 import subprocess
 if __name__ == '__main__':
-
+    #cmdfmt.test()
     with open(args.input_file) as fh:
         code = fh.read()
         output = '0x' + compiler.compile(code).hex()
+        if_passed = True
         if not args.noif :
             cons = compiler.if_compile(code)
             if args.cons :
@@ -54,13 +104,20 @@ if __name__ == '__main__':
                     cons_file.write(cons)
                 if_log = subprocess.check_output([sherrloc, "temporary.con", "-c"]).decode()
                 if "No errors" not in if_log :
-                    output = if_log
+                    if_passed = False
+                    output = if_log_pretty_printer(if_log)
+                else :
+                    print(cmdfmt.SUCC + "information flow checking passed." + cmdfmt.ENDC)
                 import os
                 os.remove("temporary.con")
         if args.output is not None :
             with open(args.output, "w") as output_file :
                 output_file.write(output)
         else :
+            if if_passed :
+                print(cmdfmt.OKBLUE + "bytecode:" + cmdfmt.ENDC)
+            else :
+                print(cmdfmt.FAIL + "information flow checking failed." + cmdfmt.ENDC)
             print(output)
 
 

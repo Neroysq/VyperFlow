@@ -816,12 +816,17 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
     elif isinstance(node, ast.IfExp) :
         raise StructureException("a if b else c not supported")
     elif isinstance(node, ast.Attribute) :
-        if node.value.id == 'self' :
-            l_result = node.attr
-            _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
-        elif node.value.id == "msg" or node.value.id == "block" :
-            l_result = IF_utils.principal_trans("sender")
-            _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+        if isinstance(node.value, ast.Name) :
+            if node.value.id == 'self' :
+                if vfdebug :
+                    print('attribute:', node.attr)
+                l_result = node.attr
+                _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+            elif node.value.id == "msg" or node.value.id == "block" :
+                l_result = IF_utils.principal_trans("sender")
+                _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+            else :
+                l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
         else :
             l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
 
@@ -836,14 +841,14 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
 
         if isinstance(node.slice, ast.Index) :
             l_index, _cons, IFLs = if_parse_expr(node.slice.value, _func_augs, _cons, IFLs, _def, pc)
-            _cons.append(IF_utils.new_cons(l_result, l_index, getpos(node.slice)))
+            _cons.append(IF_utils.new_cons(l_result, l_index, getpos(node)))
         elif isinstance(node.slice, ast.Slice) :
             lpc, _cons, IFLs = if_parse_expr(node.slice.lower, _func_augs, _cons, IFLs, _def, pc)
             upc, _cons, IFLs = if_parse_expr(node.slice.upper, _func_augs, _cons, IFLs, _def, pc)
             spc, _cons, IFLs = if_parse_expr(node.slice.step, _func_augs, _cons, IFLs, _def, pc)
-            _cons.append(IF_utils.new_cons(l_result, lpc, getpos(node.slice.lower)))
-            _cons.append(IF_utils.new_cons(l_result, upc, getpos(node.slice.upper)))
-            _cons.append(IF_utils.new_cons(l_result, spc, getpos(node.slice.step)))
+            _cons.append(IF_utils.new_cons(l_result, lpc, getpos(node)))
+            _cons.append(IF_utils.new_cons(l_result, upc, getpos(node)))
+            _cons.append(IF_utils.new_cons(l_result, spc, getpos(node)))
 
         return l_result, _cons, IFLs
 
@@ -960,11 +965,12 @@ def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
         pass
 
     elif isinstance(node, ast.Return) :
-        pos = getpos(node)
-        l_result, _cons, _IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
-        l_end = _def.name + "..end"
-        _cons.append(IF_utils.new_cons(l_end, l_result, pos))
-        _cons.append(IF_utils.new_cons(l_end, pc, pos))
+        if node.value is not None :
+            pos = getpos(node)
+            l_result, _cons, _IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
+            l_end = _def.name + "..end"
+            _cons.append(IF_utils.new_cons(l_end, l_result, pos))
+            _cons.append(IF_utils.new_cons(l_end, pc, pos))
 
     return _cons, IFLs
 

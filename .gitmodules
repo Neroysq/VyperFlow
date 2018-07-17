@@ -2,6 +2,6 @@
 	path = modules/sherrloc
 	url = https://github.com/andrewcmyers/sherrloc.git
 	branch = PLDI15
-[submodule "examples"]
-	path = examples
+[submodule "modules/examples"]
+	path = modules/examples
 	url = https://github.com/FTRobbin/awesome-vyperflow-bootcamp

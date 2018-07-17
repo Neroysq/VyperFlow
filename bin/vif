@@ -57,13 +57,15 @@ class cmdfmt:
 def fmt(s, conf) :
     return ''.join(conf) + s + cmdfmt.ENDC
 
-def pos_printer(line) :
+def pos_printer(line, code_lines) :
     tmp = line.split('[')[1].split(']')[0]
     lineno = tmp.split(',')[0]
     colno = tmp.split(',')[1].split('-')[0]
-    return 'Line no.' + fmt(lineno, [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'Column no.' + fmt(colno, [cmdfmt.YELLOW, cmdfmt.BOLD])
+    code_line = code_lines[int(lineno) - 1]
+    pointer = ' ' * (int(colno) - 1) + fmt('^', [cmdfmt.YELLOW])
+    return 'Line no.' + fmt(lineno, [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'Column no.' + fmt(colno, [cmdfmt.YELLOW, cmdfmt.BOLD]) +':\n' + code_line + '\n' + pointer
 
-def if_log_pretty_printer(log) :
+def if_log_pretty_printer(log, code_lines) :
     #if '⊓' in log or '⊔' in log :
     #    return log
     lines = log.strip().split('\n')
@@ -76,7 +78,7 @@ def if_log_pretty_printer(log) :
             elif 'P_' in right :
                 start = left
             else :
-                nxt[right] = {"name" : left, "pos" : pos_printer(line)}
+                nxt[right] = {"name" : left, "pos" : pos_printer(line, code_lines)}
     output = 'Possible information flow violation(s):'
     while True :
         if start not in nxt :
@@ -93,6 +95,7 @@ if __name__ == '__main__':
     #cmdfmt.test()
     with open(args.input_file) as fh:
         code = fh.read()
+        code_lines = code.splitlines()
         output = '0x' + compiler.compile(code).hex()
         if_passed = True
         if not args.noif :
@@ -105,7 +108,7 @@ if __name__ == '__main__':
                 if_log = subprocess.check_output([sherrloc, "temporary.con", "-c"]).decode()
                 if "No errors" not in if_log :
                     if_passed = False
-                    output = if_log_pretty_printer(if_log)
+                    output = if_log_pretty_printer(if_log, code_lines)
                 else :
                     print(cmdfmt.SUCC + "information flow checking passed." + cmdfmt.ENDC)
                 import os

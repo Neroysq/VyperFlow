@@ -62,8 +62,8 @@ def pos_printer(line, code_lines) :
     lineno = tmp.split(',')[0]
     colno = tmp.split(',')[1].split('-')[0]
     code_line = code_lines[int(lineno) - 1]
-    pointer = ' ' * (int(colno) - 1) + fmt('^', [cmdfmt.YELLOW])
-    return 'Line no.' + fmt(lineno, [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'Column no.' + fmt(colno, [cmdfmt.YELLOW, cmdfmt.BOLD]) +':\n' + code_line + '\n' + pointer
+    pointer = ' ' * (int(colno)) + fmt('^', [cmdfmt.YELLOW])
+    return 'Line ' + fmt(lineno, [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'col ' + fmt(colno, [cmdfmt.YELLOW, cmdfmt.BOLD]) +':\n' + code_line + '\n' + pointer
 
 def if_log_pretty_printer(log, code_lines) :
     #if '⊓' in log or '⊔' in log :

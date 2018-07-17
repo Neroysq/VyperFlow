@@ -1,5 +1,7 @@
 .PHONY: clean clean-pyc clean-build
 
+default: init sherrloc-build
+
 init:
 	python setup.py install
 
@@ -16,3 +18,5 @@ clean-pyc:
 	find . -name '*~' -exec rm -f {} +
 	find . -name '__pycache__' -exec rmdir {} +
 
+sherrloc-build:
+	cd sherrloc; ant

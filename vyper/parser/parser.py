@@ -91,6 +91,8 @@ def if_parse(code) :
 
 # Converts code to parse tree
 def parse(code):
+    if vfdebug :
+        print("parse begin")
     code = pre_parser(code)
     o = ast.parse(code)
     decorate_ast_with_source(o, code)
@@ -102,25 +104,28 @@ def parse(code):
 
 class removeIFL(ast.NodeTransformer) :
     def visit_Call(self, node) :
-        if node.func.id == "IFL" :
-            if vfdebug :
-                print(node)
-                print(node.args[0])
-            return node.args[0]
-        elif node.func.id == "endorse" :
-            return node.args[0]
-        else :
-            self.generic_visit(node)
-            return node
+        if isinstance(node.func, ast.Name) :
+            if node.func.id == "IFL" :
+                return node.args[0]
+            elif node.func.id == "endorse" :
+                return node.args[0]
+        node = self.generic_visit(node)
+        return node
 
     def visit_Name(self, node) :
+        if vfdebug :
+            print(node, node.id)
         if node.id[:4] == "IFL_" :
             return None
         else :
+            if vfdebug :
+                print(node, node.id, 'done')
             return node
 
 def strip_off_ifl(o) :
     o = removeIFL().visit(o)
+    if vfdebug :
+        print('strip succ')
     return o
 
 
@@ -767,7 +772,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
             _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(value)))
         return l_result, _cons, IFLs
     elif isinstance(node, ast.Call) :
-        if node.func.id == "endorse" :
+        if isinstance(node.func, ast.Name) and node.func.id == "endorse" :
             if len(node.args) != 3 :
                 raise StructureException("endorse needs exactly 3 args")
             l_from, IFLs = IF_utils.eval_label(node.args[1], IFLs)
@@ -782,7 +787,13 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
             _cons.append(IF_utils.new_cons(l_result, l_to, pos))
             #_cons.append(IF_utils.new_cons(l_orig, l_result, pos))
         else :
-            #TODO: build-in func analysis
+            #TODO: outsource or unknown built-in func
+            if not isinstance(node.func, ast.Name) or node.func.id not in _func_augs :
+                if vfdebug and isinstance(node.func, ast.Name) :
+                    print('function', node.func.id, 'not recognized')
+                l_result = "....funcnotsupported"
+                IFLs[l_result] = {"pos":getpos(node), "const":False}
+                return l_result, _cons, IFLs
             funcname = node.func.id
 
             #build_in_list_critical = set(["send"])

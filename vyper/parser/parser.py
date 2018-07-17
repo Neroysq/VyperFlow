@@ -850,6 +850,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
     elif isinstance(node, ast.comprehension) :
         # TODO:
         raise StructureException("comprehension not supported")
+    raise StructureException("Unknown parse structure")
 
 
 def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
@@ -1054,6 +1055,26 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
             args.append(arg_name)
             IFLs[arg_name] = {"pos" : None, "const" : False}
             _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), arg_name, None))
+        _func_augs[fname] = [args, vars]
+
+    util_build_in_func = [
+            {
+                "name" : "range",
+                "arg_n" : 2
+            }
+        ]
+    for f in util_build_in_func :
+        fname = f["name"]
+        l_begin = fname + "..begin"
+        l_end = fname + "..end"
+        IFLs[l_begin] = {"pos" : None, "const" : False}
+        IFLs[l_end] = {"pos" : None, "const" : False}
+        args = []
+        vars = {}
+        for i in range(f["arg_n"]) :
+            arg_name = fname + "." + str(i)
+            args.append(arg_name)
+            IFLs[arg_name] = {"pos" : None, "const" : False}
         _func_augs[fname] = [args, vars]
 
     for _def in _defs :

@@ -71,9 +71,9 @@ def if_log_pretty_printer(log) :
     for line in lines :
         if '-' in line :
             left, right = line[2:].split(',')[0].split('<=')
-            if left[:2] == 'P_' :
+            if 'P_' in left :
                 end = right
-            elif right[:2] == 'P_' :
+            elif 'P_' in right :
                 start = left
             else :
                 nxt[right] = {"name" : left, "pos" : pos_printer(line)}

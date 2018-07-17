@@ -17,6 +17,7 @@ parser.add_argument('input_file', help='VyperFlow sourcecode to compile')
 parser.add_argument('-o', help='File to output', dest='output')
 parser.add_argument('--noif', help='compile without information flow checking', action="store_true")
 parser.add_argument('--cons', help='output constraints file', action="store_true")
+parser.add_argument('--raw', help='output original Sherrloc log', action="store_true")
 
 args = parser.parse_args()
 
@@ -96,6 +97,11 @@ if __name__ == '__main__':
     with open(args.input_file) as fh:
         code = fh.read()
         code_lines = code.splitlines()
+        tmp = []
+        for line in code_lines :
+            a = line.split(';')
+            tmp += a
+        code_lines = tmp
         output = '0x' + compiler.compile(code).hex()
         if_passed = True
         if not args.noif :
@@ -108,7 +114,10 @@ if __name__ == '__main__':
                 if_log = subprocess.check_output([sherrloc, "temporary.con", "-c"]).decode()
                 if "No errors" not in if_log :
                     if_passed = False
-                    output = if_log_pretty_printer(if_log, code_lines)
+                    if args.raw : 
+                        output = if_log
+                    else :
+                        output = if_log_pretty_printer(if_log, code_lines)
                 else :
                     print(cmdfmt.SUCC + "information flow checking passed." + cmdfmt.ENDC)
                 import os

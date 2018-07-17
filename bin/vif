@@ -67,15 +67,15 @@ def pos_printer(line, code_lines) :
 
 def if_log_pretty_printer(log, code_lines) :
     #if '⊓' in log or '⊔' in log :
-    #    return log
+    #return log
     lines = log.strip().split('\n')
     nxt = {}
     for line in lines :
         if '-' in line :
             left, right = line[2:].split(',')[0].split('<=')
-            if 'P_' in left :
+            if 'P_' in left or left == '⊥' or left == '⊤' :
                 end = right
-            elif 'P_' in right :
+            elif 'P_' in right or '⊥' == right or '⊤' == right:
                 start = left
             else :
                 nxt[right] = {"name" : left, "pos" : pos_printer(line, code_lines)}

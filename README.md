@@ -50,7 +50,7 @@ If the build succeeds, you should be ready to go!
 **Remember to enter the virtual environment to use VyperFlow.** You can do this by entering:
 
 ```sh
-source vif-venv/bin/activate
+. vif-venv/bin/activate
 ```
 
 You can compile an example contract by running:

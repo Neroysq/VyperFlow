@@ -791,7 +791,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
             if not isinstance(node.func, ast.Name) or node.func.id not in _func_augs :
                 if vfdebug and isinstance(node.func, ast.Name) :
                     print('function', node.func.id, 'not recognized')
-                l_result = "....funcnotsupported"
+                l_result = "todo....funcnotsupportedyet"
                 IFLs[l_result] = {"pos":getpos(node), "const":False}
                 return l_result, _cons, IFLs
             funcname = node.func.id

@@ -773,10 +773,16 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         return l_result, _cons, IFLs
     elif isinstance(node, ast.Call) :
         if isinstance(node.func, ast.Name) and node.func.id == "endorse" :
-            if len(node.args) != 3 :
-                raise StructureException("endorse needs exactly 3 args")
-            l_from, IFLs = IF_utils.eval_label(node.args[1], IFLs)
-            l_to, IFLs = IF_utils.eval_label(node.args[2], IFLs)
+            if len(node.args) != 3 and len(node.args) != 2:
+                raise StructureException("endorse needs 2 or 3 args instead of %s" % len(node.args))
+            if len(node.args) == 3 :
+                frm = node.args[1]
+                to = node.args[2]
+            else :
+                frm = "bot"
+                to = node.args[1]
+            l_from, IFLs = IF_utils.eval_label(frm, IFLs)
+            l_to, IFLs = IF_utils.eval_label(to, IFLs)
             l_orig, _cons, IFLs = if_parse_expr(node.args[0], _func_augs, _cons, IFLs, _def, pc)
             pos = getpos(node)
             l_result = pc + '.endorse.' + IF_utils.pos_str(pos)

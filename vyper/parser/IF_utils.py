@@ -4,8 +4,8 @@ from vyper.exceptions import (
     StructureException
 )
 
-def new_cons(llb, rlb, pos) :
-    return {"left":llb, "right" : rlb, "pos" : pos}
+def new_cons(llb, rlb, pos, assump=False) :
+    return {"left":llb, "right" : rlb, "pos" : pos, "isAssumption" : assump}
 
 def pos_printer(pos) :
     return str(pos[0]) + "," + str(pos[1]) + "-" + str(pos[1]) if pos is not None else ""
@@ -52,5 +52,4 @@ def to_sherrlocexp(exp) :
         return [x for x in ppls][0]
     else :
         op = " ⊓ " if exp["meet"] else " ⊔ "
-        return "(" + op.join(ppls) + ")"
-
+        return "(" + op.join(ppls) + ')'

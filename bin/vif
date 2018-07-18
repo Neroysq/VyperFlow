@@ -12,7 +12,7 @@ from vyper import compile_lll
 sherrloc = "Sherrloc/sherrloc"
 sys.tracebacklimit = 0
 
-parser = argparse.ArgumentParser(description='VyperFlow {0} programming language for Ethereum'.format(vyper.__version__))
+parser = argparse.ArgumentParser(description='VyperFlow programming language for Ethereum'.format(vyper.__version__))
 parser.add_argument('input_file', help='VyperFlow sourcecode to compile')
 parser.add_argument('-o', help='File to output', dest='output')
 parser.add_argument('--noif', help='compile without information flow checking', action="store_true")
@@ -58,17 +58,23 @@ class cmdfmt:
 def fmt(s, conf) :
     return ''.join(conf) + s + cmdfmt.ENDC
 
-def pos_printer(line, code_lines) :
+def get_pos(line) :
     tmp = line.split('[')[1].split(']')[0]
     lineno = tmp.split(',')[0]
     colno = tmp.split(',')[1].split('-')[0]
-    code_line = code_lines[int(lineno) - 1]
-    pointer = ' ' * (int(colno)) + fmt('^', [cmdfmt.YELLOW])
-    return 'Line ' + fmt(lineno, [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'col ' + fmt(colno, [cmdfmt.YELLOW, cmdfmt.BOLD]) +':\n' + code_line + '\n' + pointer
+    if lineno == '' :
+        return None
+    return (int(lineno), int(colno))
+
+def pos_printer(p, code_lines) :
+    code_line = code_lines[p[0] - 1]
+    pointer = ' ' * (p[1]) + fmt('^', [cmdfmt.YELLOW])
+    return 'Line ' + fmt(str(p[0]), [cmdfmt.YELLOW, cmdfmt.BOLD]) + ', ' + 'col ' + fmt(str(p[1]), [cmdfmt.YELLOW, cmdfmt.BOLD]) +':\n' + code_line + '\n' + pointer
 
 def if_log_pretty_printer(log, code_lines) :
     #if '⊓' in log or '⊔' in log :
     #return log
+    """
     lines = log.strip().split('\n')
     nxt = {}
     for line in lines :
@@ -78,9 +84,7 @@ def if_log_pretty_printer(log, code_lines) :
                 end = right
             elif 'P_' in right or '⊥' == right or '⊤' == right:
                 start = left
-            else :
-                nxt[right] = {"name" : left, "pos" : pos_printer(line, code_lines)}
-    output = 'Possible information flow violation(s):'
+            nxt[right] = {"name" : left, "pos" : pos_printer(line, code_lines)}
     while True :
         if start not in nxt :
             break
@@ -88,6 +92,24 @@ def if_log_pretty_printer(log, code_lines) :
         if start == end :
             break
         start = nxt[start]["name"]
+    """
+    tmp = []
+    for line in log.strip().split('\n') :
+        if '-' in line :
+            a = line.strip().split(';')
+            tmp += a
+    lines = tmp
+    ps = []
+    for line in lines :
+        if '-' in line :
+            p = get_pos(line)
+            if p is not None :
+                ps.append(p)
+    ps = list(set(ps))
+    ps.sort()
+    output = 'Possible information flow violation(s):'
+    for p in ps :
+        output += '\n' + pos_printer(p, code_lines)
     return output
 
 
@@ -97,11 +119,6 @@ if __name__ == '__main__':
     with open(args.input_file) as fh:
         code = fh.read()
         code_lines = code.splitlines()
-        tmp = []
-        for line in code_lines :
-            a = line.split(';')
-            tmp += a
-        code_lines = tmp
         output = '0x' + compiler.compile(code).hex()
         if_passed = True
         if not args.noif :

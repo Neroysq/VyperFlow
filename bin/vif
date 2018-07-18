@@ -136,7 +136,7 @@ if __name__ == '__main__':
                     else :
                         output = if_log_pretty_printer(if_log, code_lines)
                 else :
-                    print(cmdfmt.SUCC + "information flow checking passed." + cmdfmt.ENDC)
+                    print(cmdfmt.SUCC + "Information flow checking passed." + cmdfmt.ENDC)
                 import os
                 os.remove("temporary.con")
         if args.output is not None :
@@ -144,9 +144,9 @@ if __name__ == '__main__':
                 output_file.write(output)
         else :
             if if_passed :
-                print(cmdfmt.OKBLUE + "bytecode:" + cmdfmt.ENDC)
+                print(cmdfmt.OKBLUE + "Bytecode:" + cmdfmt.ENDC)
             else :
-                print(cmdfmt.FAIL + "information flow checking failed." + cmdfmt.ENDC)
+                print(cmdfmt.FAIL + "Information flow checking failed." + cmdfmt.ENDC)
             print(output)
 
 

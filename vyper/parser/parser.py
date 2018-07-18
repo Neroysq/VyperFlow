@@ -858,14 +858,14 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
 
         if isinstance(node.slice, ast.Index) :
             l_index, _cons, IFLs = if_parse_expr(node.slice.value, _func_augs, _cons, IFLs, _def, pc)
-            _cons.append(IF_utils.new_cons(l_result, l_index, getpos(node)))
+            _cons.append(IF_utils.new_cons(l_value, l_index, getpos(node)))
         elif isinstance(node.slice, ast.Slice) :
             lpc, _cons, IFLs = if_parse_expr(node.slice.lower, _func_augs, _cons, IFLs, _def, pc)
             upc, _cons, IFLs = if_parse_expr(node.slice.upper, _func_augs, _cons, IFLs, _def, pc)
             spc, _cons, IFLs = if_parse_expr(node.slice.step, _func_augs, _cons, IFLs, _def, pc)
-            _cons.append(IF_utils.new_cons(l_result, lpc, getpos(node)))
-            _cons.append(IF_utils.new_cons(l_result, upc, getpos(node)))
-            _cons.append(IF_utils.new_cons(l_result, spc, getpos(node)))
+            _cons.append(IF_utils.new_cons(l_value, lpc, getpos(node)))
+            _cons.append(IF_utils.new_cons(l_value, upc, getpos(node)))
+            _cons.append(IF_utils.new_cons(l_value, spc, getpos(node)))
 
         return l_result, _cons, IFLs
 

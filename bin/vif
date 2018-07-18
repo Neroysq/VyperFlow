@@ -12,7 +12,7 @@ from vyper import compile_lll
 sherrloc = "Sherrloc/sherrloc"
 sys.tracebacklimit = 0
 
-parser = argparse.ArgumentParser(description='VyperFlow {0} programming language for Ethereum'.format(vyper.__version__))
+parser = argparse.ArgumentParser(description='VyperFlow programming language for Ethereum'.format(vyper.__version__))
 parser.add_argument('input_file', help='VyperFlow sourcecode to compile')
 parser.add_argument('-o', help='File to output', dest='output')
 parser.add_argument('--noif', help='compile without information flow checking', action="store_true")

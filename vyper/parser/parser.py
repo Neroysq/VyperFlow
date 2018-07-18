@@ -710,7 +710,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         pos = getpos(node)
         l_result = pc + ".lst." + IF_utils.pos_str(pos)
         IFLs[l_result] = {"pos" : pos, "const" : False}
-        _cons.append(IF_utils.new_cons(l_result, pc, pos))
+        #_cons.append(IF_utils.new_cons(l_result, pc, pos))
         for ele in node.elts :
             l_unit, _cons, IFLs = if_parse_expr(ele, _func_augs, _cons, IFLs, _def, pc)
             _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(ele)))
@@ -721,7 +721,7 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
         pos = getpos(node)
         l_result = pc + ".dict." + IF_utils.pos_str(pos)
         IFLs[l_result] = {"pos" : pos, "const" : False}
-        _cons.append(IF_utils.new_cons(l_result, pc, pos))
+        #_cons.append(IF_utils.new_cons(l_result, pc, pos))
         for value in node.values :
             l_unit, _cons, IFLs = if_parse_expr(value, _func_augs, _cons, IFLs, _def, pc)
             _cons.append(IF_utils.new_cons(l_result, l_unit, getpos(value)))
@@ -832,10 +832,10 @@ def if_parse_expr(node, _func_augs, _cons, IFLs, _def, pc) :
                 if vfdebug :
                     print('attribute:', node.attr)
                 l_result = node.attr
-                _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+                #_cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
             elif node.value.id == "msg" or node.value.id == "block" :
                 l_result = IF_utils.principal_trans("sender")
-                _cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
+                #_cons.append(IF_utils.new_cons(l_result, pc, getpos(node)))
             else :
                 l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
         else :
@@ -960,6 +960,10 @@ def if_parse_sentence(node, _func_augs, _cons, IFLs, _def, pc) :
             _cons.append(IF_utils.new_cons(if_label, l_var, pos))
         else :
             IFLs[l_var] = {"pos" : pos, "const" : False}
+
+        if node.value is not None :
+            l_result, _cons, IFLs = if_parse_expr(node.value, _func_augs, _cons, IFLs, _def, pc)
+            _cons.append(IF_utils.new_cons(l_var, l_result, getpos(node.value)))
         _cons.append(IF_utils.new_cons(l_var, pc, pos))
         _func_augs[_def.name][1][node.target.id] = l_var
 
@@ -1001,22 +1005,25 @@ def if_printer(IFLs, _cons) :
             s = " ".join(s)
             output += s + '\n'
     #bound
-    """
-    output += "\n%%\n"
-    for lname, lvalue in IFLs.items() :
-        b = " ".join(["_", "<=", IF_utils.to_sherrlocname(lname), ";\n"])
-        t = " ".join([IF_utils.to_sherrlocname(lname), "<=", "*", ";\n"])
-        output += b + t
-    print(output)
-    """
+    output += "\n\n"
+    for con in _cons :
+        if con["isAssumption"] :
+            l = IF_utils.to_sherrlocexp(con["left"])
+            r = IF_utils.to_sherrlocexp(con["right"])
+            p = IF_utils.pos_printer(con["pos"])
+            output += l + " <= " + r + "; "
+            output += "[" + p + "]\n" if p != "" else "\n"
+    #print(output)
+
     #constraints
     output += "\n\n"
     for con in _cons :
-        l = IF_utils.to_sherrlocexp(con["left"])
-        r = IF_utils.to_sherrlocexp(con["right"])
-        p = IF_utils.pos_printer(con["pos"])
-        output += l + " <= " + r + "; "
-        output += "[" + p + "]\n" if p != "" else "\n"
+        if not con['isAssumption'] :
+            l = IF_utils.to_sherrlocexp(con["left"])
+            r = IF_utils.to_sherrlocexp(con["right"])
+            p = IF_utils.pos_printer(con["pos"])
+            output += l + " <= " + r + "; "
+            output += "[" + p + "]\n" if p != "" else "\n"
 
     return output
 
@@ -1063,15 +1070,15 @@ def if_parse_tree_to_lll(code, origcode, runtime_only=False):
         l_end = fname + "..end"
         IFLs[l_begin] = {"pos" : None, "const" : False}
         IFLs[l_end] = {"pos" : None, "const" : False}
-        _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), l_begin, None))
-        _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), l_end, None))
+        _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), l_begin, None, True))
+        _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), l_end, None, True))
         args = []
         vars = {}
         for i in range(f["arg_n"]) :
             arg_name = fname + "." + str(i)
             args.append(arg_name)
             IFLs[arg_name] = {"pos" : None, "const" : False}
-            _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), arg_name, None))
+            _cons.append(IF_utils.new_cons(IF_utils.principal_trans("this"), arg_name, None, True))
         _func_augs[fname] = [args, vars]
 
     util_build_in_func = [
